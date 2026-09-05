@@ -145,6 +145,15 @@ Docker が入っていて、PostgreSQL 込みで動かしたい場合のみ。
 docker compose up --build
 ```
 
+> **コードを変更したら必ず `--build` を付けてください。**
+> フロントエンドは JavaScript をイメージのビルド時に焼き込むため、`--build` なしの
+> `docker compose up` では古い画面のまま起動します。画面に変更が反映されないときは、
+> まずこれを疑ってください。
+>
+> ```bash
+> docker compose up -d --build
+> ```
+
 `.env.example` を `.env` にコピーすると `FRONTEND_PORT` / `BACKEND_PORT` を変更できます
 （`BACKEND_PORT` を変えたときは `NEXT_PUBLIC_API_BASE` も合わせて変え、frontend の再ビルドが
 必要です。`NEXT_PUBLIC_*` はビルド時にJSへ埋め込まれるためです）。

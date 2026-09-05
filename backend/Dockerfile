@@ -6,9 +6,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# 依存だけ先に入れて、アプリ変更でレイヤキャッシュが壊れないようにする
-COPY requirements.txt ./
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# 依存だけ先に入れて、アプリ変更でレイヤキャッシュが壊れないようにする。
+# compose は PostgreSQL を使うため、任意依存の psycopg はこの構成では必須になる。
+# anthropic も同時に入れておき、ANTHROPIC_API_KEY を渡すだけで使える状態にする。
+COPY requirements.txt requirements-optional.txt ./
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pip install -r requirements-optional.txt
 
 COPY app ./app
 COPY pyproject.toml ./
