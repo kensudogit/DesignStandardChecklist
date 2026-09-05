@@ -13,11 +13,13 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.core import taxonomy as tx
-from app.core.atomizer import AtomicCheck, atomize
+from app.core import llm_split
+from app.core.atomizer import AtomicCheck, atomize, base_sentence
 from app.core.coverage import CoverageResult, compute_coverage
 from app.core.dedupe import find_duplicates
-from app.core.extractor import extract_rules
+from app.core.extractor import ExtractedRule, extract_rules
 from app.core.parsers import parse_document
 from app.core.severity import decide_severity
 from app.core.structure import assign_structure
@@ -26,6 +28,35 @@ from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument
 #: 短すぎる / 述語が無い等でチェック化できない場合の理由
 REASON_TOO_SHORT = "確認可能な粒度に変換できない (規定文が短く述部を特定できない)"
 REASON_AMBIGUOUS_ONLY = "曖昧表現のみで構成され、判定基準が標準書内に定義されていない"
+
+#: これより短い確認事項は「〜か？」を付けても判定できないので採用しない
+MIN_CHECK_POINT_LEN = 8
+
+
+def checks_for_rule(
+    item: ExtractedRule, assist: llm_split.SplitAssist | None = None
+) -> tuple[list[AtomicCheck], str | None]:
+    """STEP 7: 1規定 → Atomic Check 群。変換できない場合は (空, 理由)。
+
+    DB を触らないので eval/ の評価スクリプトからも同じ判定を呼べる。
+    ここを分岐の唯一の置き場にして、評価が実装のコピーを測ってしまうのを防ぐ。
+
+    assist を渡すと、ルールベースが1件にしか分解できなかった規定だけ Claude に
+    区切りを尋ねる。提案が原文と一致しなければ黙って捨て、ルールベースの結果を使う。
+    """
+    checks = [c for c in atomize(item) if len(c.check_point) >= MIN_CHECK_POINT_LEN]
+    if not checks:
+        return [], REASON_TOO_SHORT
+    if item.ambiguity and item.rule_type == "Reference":
+        return [], REASON_AMBIGUOUS_ONLY
+
+    if assist is not None and len(checks) == 1:
+        assisted = llm_split.assisted_checks(item, assist, base_sentence(item))
+        if assisted:
+            kept = [c for c in assisted if len(c.check_point) >= MIN_CHECK_POINT_LEN]
+            if len(kept) > len(checks):
+                return kept, None
+    return checks, None
 
 
 def suggest_document_type(filename: str, sample_text: str = "") -> str:
@@ -111,14 +142,15 @@ def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
     db.flush()
 
     # --- STEP 7: Atomic Check 分解 ---
+    # 設定と資格情報が揃っているときだけ AI補助を使う。無ければルールベースのまま。
+    settings = get_settings()
+    assist = llm_split.build_assist(settings.llm_split_enabled, settings.llm_split_cache_path)
+
     pending: list[tuple[Rule, AtomicCheck]] = []
     for rule, item in zip(rule_rows, extracted, strict=True):
-        checks = [c for c in atomize(item) if len(c.check_point) >= 8]
-        if not checks:
-            rule.unconverted_reason = REASON_TOO_SHORT
-            continue
-        if rule.ambiguity and rule.rule_type == "Reference":
-            rule.unconverted_reason = REASON_AMBIGUOUS_ONLY
+        checks, reason = checks_for_rule(item, assist=assist)
+        if reason is not None:
+            rule.unconverted_reason = reason
             continue
         for check in checks:
             pending.append((rule, check))

@@ -1,0 +1,22 @@
+﻿Rule Key,Original Rule,Rule Type,Category,Condition,Exception,Ambiguity,Convertible,Note
+R01,処理概要には、処理の目的と処理対象を記載すること,Mandatory,完全性|保守性,,,no,yes,目的と対象は別々に欠落し得るので2チェック
+R02,処理の入力、出力、前提条件、事後条件を記載すること,Mandatory,入力|完全性,,,no,yes,分解後も「処理の」を残さないと単体で判定できない
+R03,処理フローはアクティビティ図またはフローチャートで表現すること,Mandatory,完全性,,,no,yes,選択肢の列挙なので分解してはいけない
+R04,分岐条件はすべての分岐先を網羅して記載すること,Mandatory,完全性,,,no,yes,
+R05,発行するSQLは詳細設計書に記載すること,Mandatory,DB,,,no,yes,
+R06,更新処理はトランザクション境界を明記すること,Mandatory,トランザクション,,,no,yes,
+R07,複数レコードを更新する場合は排他制御方式を明記すること,Conditional Mandatory,排他,複数レコードを更新する場合,,no,yes,
+R08,入力チェックのエラーメッセージはメッセージIDで管理すること,Mandatory,エラー処理,,,no,yes,
+R09,業務エラーとシステムエラーを区別して設計すること,Mandatory,エラー処理,,,no,yes,区別するという1つの要求なので分解してはいけない
+R10,想定外の例外を握りつぶす設計としてはならない,Prohibited,エラー処理|例外処理,,,no,yes,
+R11,メッセージ本文にシステム内部の例外情報を出力してはならない,Prohibited,セキュリティ|エラー処理|出力,,,no,yes,
+R12,処理の開始と終了をログに出力すること,Mandatory,ログ,,,no,yes,開始ログだけある状態が起こり得るので2チェック
+R13,ログには個人情報を出力してはならない,Prohibited,セキュリティ|ログ,,,no,yes,
+R14,ログレベルは詳細設計書に記載すること,Mandatory,ログ,,,no,yes,
+R15,外部API呼出しを行う場合はタイムアウト値を定義すること,Conditional Mandatory,API|IF|性能,外部API呼出しを行う場合,,no,yes,conversion-rules.md 3 の規定
+R16,外部API呼出しが失敗した場合のリトライ回数を定義すること,Conditional Mandatory,API|IF,外部API呼出しが失敗した場合,,no,yes,「失敗した場合」は条件。文末が条件節でなくても保持する必要がある
+R17,外部システムとの連携仕様は連携仕様書と対応付けて記載すること,Mandatory,IF|トレーサビリティ|完全性,,,no,yes,
+R18,機能ごとに参照権限および更新権限を定義すること,Mandatory,セキュリティ,,,no,yes,参照権限と更新権限は別々に確認できる
+R19,権限チェックはサーバ側で行うこと,Mandatory,セキュリティ,,,no,yes,
+R20,想定データ件数と目標レスポンスタイムを記載すること,Mandatory,性能,,,no,yes,性能の規定。API は誤り
+R21,1件あたりの処理時間が長い処理は非同期化を推奨する,Recommended,性能,,,no,yes,

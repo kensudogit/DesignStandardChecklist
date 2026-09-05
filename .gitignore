@@ -16,6 +16,12 @@ frontend/.env.local
 # docker compose
 .env
 
+# eval が --json で書き出すレポート (baseline.json は追跡する)
+backend/eval/reports/
+# eval --llm が作る Claude の応答キャッシュ。
+# 結果を固定したい場合は git add -f で明示的に追跡する。
+backend/eval/llm-split-cache.json
+
 # start.ps1 / start.sh が出力するログ
 logs/
 .running.json

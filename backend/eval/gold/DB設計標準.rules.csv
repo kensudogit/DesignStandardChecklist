@@ -1,0 +1,20 @@
+﻿Rule Key,Original Rule,Rule Type,Category,Condition,Exception,Ambiguity,Convertible,Note
+R01,テーブル物理名は英大文字とアンダースコアで構成すること,Mandatory,DB|命名,,,no,yes,
+R02,テーブル論理名は業務用語で記載すること,Mandatory,DB|命名,,,no,yes,
+R03,テーブル物理名に日本語を使用してはならない,Prohibited,DB|命名,,,no,yes,
+R04,カラム物理名、カラム論理名、データ型、桁数、NULL許可を記載すること,Mandatory,DB,,,no,yes,
+R05,同一の意味を持つカラムは、テーブル間で同じ物理名を使用すること,Mandatory,DB|命名|一貫性,,,no,yes,
+R06,すべてのテーブルに主キーを定義すること,Mandatory,DB,,,no,yes,
+R07,外部キー制約を定義する場合は、参照先テーブルと参照先カラムを明記すること,Conditional Mandatory,DB,外部キー制約を定義する場合,,no,yes,参照先テーブルと参照先カラムは別々に確認できる
+R08,検索条件に使用するカラムにはインデックスを定義することを推奨する,Recommended,DB,,,no,yes,
+R09,インデックスは1テーブルあたり5個以内とすることが望ましい,Recommended,DB,,,no,yes,
+R10,更新処理はトランザクション境界を明記すること,Mandatory,トランザクション,,,no,yes,
+R11,複数テーブルを更新する場合は、デッドロックを避けるため更新順序を統一すること,Conditional Mandatory,トランザクション|排他,複数テーブルを更新する場合,,no,yes,
+R12,自動コミットに依存した設計としてはならない,Prohibited,トランザクション,,,no,yes,
+R13,排他制御方式は楽観ロックまたは悲観ロックのいずれかとする,Mandatory,排他,,,no,yes,選択肢の列挙なので分解してはいけない
+R14,楽観ロックを採用する場合は、バージョン管理用カラムを定義すること,Conditional Mandatory,排他,楽観ロックを採用する場合,,no,yes,
+R15,個人情報を格納するカラムは暗号化すること,Mandatory,セキュリティ,,,no,yes,
+R16,アプリケーションから動的SQLを組み立ててはならない,Prohibited,セキュリティ|DB,,,no,yes,
+R17,DB接続に使用するパスワードを設計書に平文で記載してはならない,Prohibited,セキュリティ,,,no,yes,
+R18,更新履歴を保持するテーブルには、登録日時、更新日時、更新者を記載すること,Mandatory,DB,,,no,yes,
+R19,物理削除は原則として行わず、論理削除とすること,Recommended|Mandatory,DB|完全性,,ただし、一時テーブルはこの限りでない,no,yes,「原則として」があるため Recommended 寄りだが Mandatory も許容する

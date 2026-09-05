@@ -1,0 +1,6 @@
+﻿Gold Name,Document Path,Note
+画面設計標準,samples/画面設計標準.md,素直な文体。回帰検知用のベースライン
+DB設計標準,samples/DB設計標準.md,並列要求と例外規定を含む
+詳細設計標準,samples/詳細設計標準.md,条件表現の揺れを含む
+API設計標準,samples/API設計標準.xlsx,表形式。分類列・区分列が与えられる場合の挙動
+外部設計標準,backend/eval/corpus/外部設計標準.md,実文書に近い文体の揺れを集めた評価専用文書

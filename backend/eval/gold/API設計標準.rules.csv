@@ -1,0 +1,17 @@
+﻿Rule Key,Original Rule,Rule Type,Category,Condition,Exception,Ambiguity,Convertible,Note
+R01,エンドポイントはリソース名を複数形で表現すること,Mandatory,API,,,no,yes,区分列・分類列を持つ表形式。標準書自身の分類に従うのが正しい
+R02,エンドポイントのパスに動詞を含めてはならない,Prohibited,API,,,no,yes,
+R03,参照はGET、登録はPOST、更新はPUT、削除はDELETEを使用すること,Mandatory,API,,,no,yes,操作ごとに別々に違反し得るので4チェック
+R04,リクエストパラメータの型、桁数、必須有無を定義すること,Mandatory,API,,,no,yes,分解後も「リクエストパラメータの」を残すこと
+R05,レスポンスの項目名、型、サンプルを記載すること,Mandatory,API,,,no,yes,分解後も「レスポンスの」を残すこと
+R06,正常時と異常時のHTTPステータスコードを定義すること,Mandatory,API,,,no,yes,正常時と異常時は別々に欠落し得る
+R07,エラー応答にはエラーコードとメッセージを含めること,Mandatory,エラー処理,,,no,yes,エラーコードとメッセージは別々に確認できる
+R08,エラー応答にスタックトレースを含めてはならない,Prohibited,エラー処理|セキュリティ,,,no,yes,
+R09,APIの認証方式を定義すること,Mandatory,セキュリティ,,,no,yes,
+R10,リソースごとにアクセス可能なロールを定義すること,Mandatory,セキュリティ,,,no,yes,
+R11,更新系APIはリトライ時の冪等性を考慮すること,Mandatory,API|正確性,,,no,yes,分類列「冪等性」は taxonomy に対応語が無い
+R12,外部API呼出しを行う場合はタイムアウト値を定義すること,Conditional Mandatory|Mandatory,性能|API,外部API呼出しを行う場合,,no,yes,分類列は「タイムアウト」。区分列が「必須」なので標準書自身の分類も正解とする（条件は別途保持される）
+R13,APIのバージョンはパスに含めることを推奨する,Recommended,API,,,no,yes,
+R14,1リクエストあたりの最大取得件数を定義すること,Mandatory,API|性能,,,no,yes,分類列「流量制御」は taxonomy に対応語が無い
+R15,リクエストIDをログに出力すること,Mandatory,ログ,,,no,yes,
+R16,リクエストボディの個人情報をログに出力してはならない,Prohibited,ログ|セキュリティ,,,no,yes,

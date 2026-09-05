@@ -4,6 +4,7 @@
 # PostgreSQL を使う場合のみ（既定の SQLite なら不要）
 psycopg[binary]==3.2.3
 
-# AI推奨事項を Claude API で生成する場合のみ
-# （観点カタログによる生成はこれ無しで動きます）
+# Claude API を使う場合のみ
+#   - AI推奨事項の生成（観点カタログ方式はこれ無しで動きます）
+#   - 並列表現の分解補助（DSC_LLM_SPLIT_ENABLED=true のときだけ。既定は無効）
 anthropic==1.4.0

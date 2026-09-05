@@ -127,7 +127,7 @@ def infer_category(text: str, heading_path: str, category_hint: str | None = Non
 
 def extract_condition(text: str) -> str | None:
     """条件句をそのまま切り出す (削除しない / 要約しない)。"""
-    m = re.search(r"([^、。]{2,60}?(?:場合|とき|際|に限り|であれば))(?:は|には|に|、)", text)
+    m = re.search(r"([^、。]{2,60}?(?:場合|とき|際|に限って|に限り|であれば))(?:は|には|に|、|の)", text)
     if m:
         return m.group(1).strip()
     return None

@@ -25,11 +25,22 @@
 | バックエンド | Python 3.12 / FastAPI / SQLAlchemy / SQLite | [`backend/`](backend) |
 | フロントエンド | Next.js (App Router) / React / TypeScript | [`frontend/`](frontend) |
 | 元Skill | SKILL.md・テンプレート・変換ルール | [`skill/`](skill) |
-| サンプル標準書 | 画面設計標準 / 詳細設計標準 / DB設計標準 / API設計標準(Excel) | [`samples/`](samples) |
+| サンプル標準書 | 12の文書種別を一通り揃えた標準書サンプル（Markdown / Word / Excel） | [`samples/`](samples) |
+| 変換精度の評価 | 正解データ (gold) と評価スクリプト | [`backend/eval/`](backend/eval) |
 
-抽出エンジンは **決定的（ルールベース）** です。LLM に依存しないため、同じ標準書からは常に同じ
-チェックリストが生成され、すべてのチェック項目が標準書の原文に紐づきます。
-Claude API を使うのは「AI推奨事項」だけで、それは標準由来のチェックリストとは別の成果物です。
+抽出エンジンは **既定で決定的（ルールベース）** です。LLM に依存しないため、同じ標準書からは
+常に同じチェックリストが生成され、すべてのチェック項目が標準書の原文に紐づきます。
+
+Claude API は2か所で**任意に**使えます。どちらも既定は無効で、APIキーが無くても全機能が動きます。
+
+| 用途 | 既定 | 出力への影響 |
+|---|---|---|
+| AI推奨事項の生成 | 無効 | 専用の成果物。チェックリストには混ざりません |
+| 並列表現の分解補助（STEP 7） | 無効 | Claude が答えるのは「原文のどこで切るか」だけ。文言は原文の語のみ |
+
+後者は「桁数および範囲の入力チェック」のように、日本語の係り受けを読まないと切れない並列に
+限って使います。返ってきた区切りが原文と1文字でも合わなければ捨ててルールベースの結果を使うため、
+標準書に無い語がチェック項目に入る経路はありません（必須原則 1/3）。
 
 ## 起動方法
 
@@ -116,14 +127,29 @@ AI推奨事項の使い方、この生成器が守っている原則、よくあ
 
 ### 試す
 
-`samples/画面設計標準.md` をアップロードすると、32件の規定から41件のチェック項目が生成され、
-必須規定・禁止規定の Coverage が 100% になります。
+`samples/` に、文書種別を一通り揃えた標準書サンプルがあります。どれをアップロードしても
+必須規定・禁止規定の Coverage は 100% になります。
 
-3つのMarkdownサンプルをすべて登録したうえで「統合レビュー表」から横断チェックリストを作ると、
-標準書をまたいで完全に重複する3件が統合され、88件の統合チェックリストになります。
+| サンプル | 種別 | 形式 | 規定 | チェック項目 |
+|---|---|---|---|---|
+| `画面設計標準.md` | 画面 | Markdown | 32 | 42 |
+| `詳細設計標準.md` | 詳細設計 | Markdown | 21 | 27 |
+| `基本設計標準.md` | 基本設計 | Markdown | 27 | 39 |
+| `DB設計標準.md` | DB | Markdown | 19 | 27 |
+| `API設計標準.xlsx` | API | Excel（表形式） | 16 | 24 |
+| `外部IF設計標準.md` | 外部IF | Markdown | 27 | 41 |
+| `帳票設計標準.docx` | 帳票 | Word | 25 | 36 |
+| `バッチ設計標準.md` | バッチ | Markdown | 30 | 36 |
+| `セキュリティ設計標準.md` | セキュリティ | Markdown | 31 | 31 |
+| `コーディング標準.md` | コーディング | Markdown | 27 | 32 |
+| `テスト設計標準.md` | テスト | Markdown | 29 | 41 |
 
-`samples/API設計標準.xlsx` は表形式の標準書のサンプルです（実務でよくある
-「No / 章 / 節 / 分類 / 規定内容 / 区分 / 重要度 / 備考」の列構成）。
+`API設計標準.xlsx` は表形式の標準書のサンプルです（実務でよくある
+「No / 章 / 節 / 分類 / 規定内容 / 区分 / 重要度 / 備考」の列構成）。`帳票設計標準.docx` は
+Word 形式のサンプルで、見出しスタイルから章・節を取ります。
+
+画面設計標準・詳細設計標準・DB設計標準の3本を登録したうえで「統合レビュー表」から横断
+チェックリストを作ると、標準書をまたいで完全に重複する3件が統合され、93件になります。
 
 ### 任意: 追加機能を使う場合
 
@@ -132,10 +158,25 @@ cd backend && .venv/Scripts/python.exe -m pip install -r requirements-optional.t
 ```
 
 - PostgreSQL を使う（`psycopg`）
-- AI推奨事項を Claude API で生成する（`anthropic`）
+- Claude API を使う（`anthropic`）
 
 どちらも使わなければインストール不要です。AI推奨事項の「観点カタログ」方式は
 追加インストールなしで動きます。
+
+Claude API を使う場合は `ANTHROPIC_API_KEY` を設定してください。並列表現の分解補助
+（STEP 7）を有効にするには、さらに次を設定します。
+
+```
+DSC_LLM_SPLIT_ENABLED=true
+```
+
+有効にすると、ルールベースが1件にしか分解できなかった規定のうち、並列の接続詞を含むものだけを
+Claude に相談します（標準書1本あたり数件）。Claude が答えるのは**原文のどこで切るか**だけで、
+チェック項目はこちら側で原文の部分文字列を連結して組み立てます。区切りが原文を覆えていなければ
+その提案は捨て、ルールベースの結果を使います。応答は規定文をキーにキャッシュするため、
+同じ標準書を再解析してもチェック項目がずれません。
+
+補助で分解されたチェック項目には、その旨が備考に付きます。
 
 ### 任意: Docker で起動する
 
@@ -178,6 +219,7 @@ SKILL.md の「必須原則」「禁止事項」は、そのままコードと�
 | AI推奨事項を分離 | AI推奨事項は専用テーブル・専用API・専用成果物。チェックリスト／トレーサビリティ／Coverage のどの問い合わせにも構造的に混入しない | `test_recommendations_do_not_leak_into_standard_artifacts` |
 | 出典を捏造しない | AI推奨事項のCSVに Standard ID / Chapter / Section / Page 列を持たせない | `test_recommendations_have_no_fabricated_sources` |
 | Yes/No/N/A で判定可能な粒度 | すべてのチェック項目を「〜か？」の疑問文に変換 | `test_every_check_point_is_a_question` |
+| AI補助でも語を足さない | Claude には原文の部分文字列しか返させず、原文を覆えているか1文字単位で検証。合わなければ捨ててルールベースに戻す | `test_invalid_suggestion_falls_back_to_the_rule_based_result` |
 
 ## 機能
 
@@ -343,11 +385,42 @@ DSC_DATABASE_URL=postgresql+psycopg://user:password@host:5432/dsc
 cd backend && .venv/Scripts/python.exe -m pytest -q
 ```
 
-134件。抽出エンジンの単体テスト（`test_extraction.py`）、各入力形式のパーサ
+223件。抽出エンジンの単体テスト（`test_extraction.py`）、各入力形式のパーサ
 （`test_parsers.py`）、表形式の標準書と規範表現の語彙（`test_table_standards.py`）、
 アップロード〜出力までの結合テスト（`test_api.py`）、横断チェックリスト
 （`test_review_sets.py`）、AI推奨事項の分離（`test_recommendations.py`）、
-認証（`test_auth.py`）を含みます。
+認証（`test_auth.py`）、全サンプル標準書の通し変換（`test_samples.py`）、
+AI補助が原文に無い語を混ぜないこと（`test_llm_split.py`）、
+変換精度の回帰検知（`test_eval_baseline.py`）を含みます。
+
+### 変換精度の測定
+
+上記のテストは「動くこと」を確認しますが、生成されたチェックリストの**中身が正しいか**は
+別問題です。抽出ロジックを触ると、テスト件数は変わらないままチェックリストだけが静かに
+悪化することがあります。そのために正解データ（gold）との突き合わせを用意しています。
+
+```bash
+cd backend && .venv/Scripts/python.exe -m eval.runner --details
+```
+
+標準書5本分の正解データ（規定 115件・確認事項 160件）に対して、規定抽出・Atomic分解・
+規範レベル・分類・条件保持・例外保持を測ります。現在のスコアは次のとおりです。
+
+| 指標 | スコア |
+|---|---|
+| 規定抽出 F1 | 100.0%（取りこぼし 0 / 誤抽出 0） |
+| 確認事項 F1 | 98.7%（適合率 100.0% / 再現率 97.5%） |
+| 規範レベル正解率 | 100.0% |
+| 分類正解率 | 99.1% |
+| 条件の保持 | 16/16 |
+| 例外の保持 | 4/4 |
+
+正解データの作り方と、残っている変換の課題は
+[`backend/eval/README.md`](backend/eval/README.md) を参照してください。
+
+`--check-baseline` で `eval/baseline.json` より悪化していれば exit 1 になり、同じ判定を
+`tests/test_eval_baseline.py` が CI で行います。精度を上げたときは `--update-baseline` で
+baseline を更新してコミットに含めてください。
 
 push / PR ごとに GitHub Actions で backend のテストと frontend の typecheck・build が走ります
 （[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。

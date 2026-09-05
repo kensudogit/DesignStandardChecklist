@@ -38,6 +38,10 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: 変換精度レポート
+        # 合否は tests/test_eval_baseline.py で判定済み。ここは差分を読むための表示。
+        run: python -m eval.runner --details
+
   scripts:
     name: Scripts (syntax)
     runs-on: windows-latest

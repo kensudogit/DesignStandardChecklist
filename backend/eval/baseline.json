@@ -1,0 +1,344 @@
+{
+  "total": {
+    "name": "合計",
+    "document": "",
+    "rule": {
+      "tp": 115,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "check": {
+      "tp": 156,
+      "fp": 0,
+      "fn": 4,
+      "precision": 1.0,
+      "recall": 0.975,
+      "f1": 0.9873
+    },
+    "rule_type_accuracy": {
+      "hit": 115,
+      "total": 115,
+      "value": 1.0
+    },
+    "category_accuracy": {
+      "hit": 114,
+      "total": 115,
+      "value": 0.9913
+    },
+    "condition_recall": {
+      "hit": 16,
+      "total": 16,
+      "value": 1.0
+    },
+    "exception_recall": {
+      "hit": 4,
+      "total": 4,
+      "value": 1.0
+    },
+    "ambiguity_accuracy": {
+      "hit": 115,
+      "total": 115,
+      "value": 1.0
+    },
+    "convertible_accuracy": {
+      "hit": 115,
+      "total": 115,
+      "value": 1.0
+    },
+    "findings": []
+  },
+  "documents": [
+    {
+      "name": "画面設計標準",
+      "document": "samples/画面設計標準.md",
+      "rule": {
+        "tp": 32,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "check": {
+        "tp": 42,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.9767,
+        "f1": 0.9882
+      },
+      "rule_type_accuracy": {
+        "hit": 32,
+        "total": 32,
+        "value": 1.0
+      },
+      "category_accuracy": {
+        "hit": 31,
+        "total": 32,
+        "value": 0.9688
+      },
+      "condition_recall": {
+        "hit": 3,
+        "total": 3,
+        "value": 1.0
+      },
+      "exception_recall": {
+        "hit": 1,
+        "total": 1,
+        "value": 1.0
+      },
+      "ambiguity_accuracy": {
+        "hit": 32,
+        "total": 32,
+        "value": 1.0
+      },
+      "convertible_accuracy": {
+        "hit": 32,
+        "total": 32,
+        "value": 1.0
+      },
+      "findings": [
+        {
+          "kind": "確認事項の取りこぼし",
+          "detail": "R12-2 (要語: 数値項目 + 範囲 + 入力チェック)",
+          "expected": "数値項目に範囲の入力チェックが定義されているか？",
+          "actual": "数値項目には桁数および範囲の入力チェックを定義しているか？"
+        },
+        {
+          "kind": "分類の誤り",
+          "detail": "R29",
+          "expected": "アクセシビリティ",
+          "actual": "入力"
+        }
+      ]
+    },
+    {
+      "name": "DB設計標準",
+      "document": "samples/DB設計標準.md",
+      "rule": {
+        "tp": 19,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "check": {
+        "tp": 27,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "rule_type_accuracy": {
+        "hit": 19,
+        "total": 19,
+        "value": 1.0
+      },
+      "category_accuracy": {
+        "hit": 19,
+        "total": 19,
+        "value": 1.0
+      },
+      "condition_recall": {
+        "hit": 3,
+        "total": 3,
+        "value": 1.0
+      },
+      "exception_recall": {
+        "hit": 1,
+        "total": 1,
+        "value": 1.0
+      },
+      "ambiguity_accuracy": {
+        "hit": 19,
+        "total": 19,
+        "value": 1.0
+      },
+      "convertible_accuracy": {
+        "hit": 19,
+        "total": 19,
+        "value": 1.0
+      },
+      "findings": []
+    },
+    {
+      "name": "詳細設計標準",
+      "document": "samples/詳細設計標準.md",
+      "rule": {
+        "tp": 21,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "check": {
+        "tp": 27,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.9643,
+        "f1": 0.9818
+      },
+      "rule_type_accuracy": {
+        "hit": 21,
+        "total": 21,
+        "value": 1.0
+      },
+      "category_accuracy": {
+        "hit": 21,
+        "total": 21,
+        "value": 1.0
+      },
+      "condition_recall": {
+        "hit": 3,
+        "total": 3,
+        "value": 1.0
+      },
+      "exception_recall": {
+        "hit": 0,
+        "total": 0,
+        "value": 1.0
+      },
+      "ambiguity_accuracy": {
+        "hit": 21,
+        "total": 21,
+        "value": 1.0
+      },
+      "convertible_accuracy": {
+        "hit": 21,
+        "total": 21,
+        "value": 1.0
+      },
+      "findings": [
+        {
+          "kind": "確認事項の取りこぼし",
+          "detail": "R12-2 (要語: 終了 + ログ + 出力)",
+          "expected": "処理の終了がログに出力されるか？",
+          "actual": "処理の開始と終了をログに出力しているか？"
+        }
+      ]
+    },
+    {
+      "name": "API設計標準",
+      "document": "samples/API設計標準.xlsx",
+      "rule": {
+        "tp": 16,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "check": {
+        "tp": 24,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.96,
+        "f1": 0.9796
+      },
+      "rule_type_accuracy": {
+        "hit": 16,
+        "total": 16,
+        "value": 1.0
+      },
+      "category_accuracy": {
+        "hit": 16,
+        "total": 16,
+        "value": 1.0
+      },
+      "condition_recall": {
+        "hit": 1,
+        "total": 1,
+        "value": 1.0
+      },
+      "exception_recall": {
+        "hit": 0,
+        "total": 0,
+        "value": 1.0
+      },
+      "ambiguity_accuracy": {
+        "hit": 16,
+        "total": 16,
+        "value": 1.0
+      },
+      "convertible_accuracy": {
+        "hit": 16,
+        "total": 16,
+        "value": 1.0
+      },
+      "findings": [
+        {
+          "kind": "確認事項の取りこぼし",
+          "detail": "R06-2 (要語: 異常時 + HTTPステータスコード + 定義)",
+          "expected": "異常時のHTTPステータスコードが定義されているか？",
+          "actual": "正常時と異常時のHTTPステータスコードを定義しているか？"
+        }
+      ]
+    },
+    {
+      "name": "外部設計標準",
+      "document": "backend/eval/corpus/外部設計標準.md",
+      "rule": {
+        "tp": 27,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "check": {
+        "tp": 36,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.973,
+        "f1": 0.9863
+      },
+      "rule_type_accuracy": {
+        "hit": 27,
+        "total": 27,
+        "value": 1.0
+      },
+      "category_accuracy": {
+        "hit": 27,
+        "total": 27,
+        "value": 1.0
+      },
+      "condition_recall": {
+        "hit": 6,
+        "total": 6,
+        "value": 1.0
+      },
+      "exception_recall": {
+        "hit": 2,
+        "total": 2,
+        "value": 1.0
+      },
+      "ambiguity_accuracy": {
+        "hit": 27,
+        "total": 27,
+        "value": 1.0
+      },
+      "convertible_accuracy": {
+        "hit": 27,
+        "total": 27,
+        "value": 1.0
+      },
+      "findings": [
+        {
+          "kind": "確認事項の取りこぼし",
+          "detail": "G25-2 (要語: 実行順序 + 運用設計書 + 記載)",
+          "expected": "連携の実行順序が運用設計書と対応付けて記載されているか？",
+          "actual": "連携の実行時刻および実行順序を運用設計書と対応付けて記載しているか？"
+        }
+      ]
+    }
+  ]
+}

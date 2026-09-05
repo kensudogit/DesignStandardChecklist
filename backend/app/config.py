@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     #: 起動時に作成する初期管理者。既に存在する場合は何もしない。
     bootstrap_admin_username: str = ""
     bootstrap_admin_password: str = ""
+    # --- 変換補助 (STEP 7) ---
+    #: True にすると、ルールベースが分解できなかった並列表現だけ Claude に区切りを尋ねる。
+    #: 原文の部分文字列以外は採用しないため、標準書に無い語がチェック項目に混ざることはない。
+    #: ANTHROPIC_API_KEY と anthropic SDK が無ければ、True でもルールベースのまま動く。
+    llm_split_enabled: bool = False
+    #: 応答のキャッシュ。同じ標準書を再解析してもチェック項目がずれないようにする。
+    llm_split_cache: str = "./storage/llm-split-cache.json"
+
     cors_origins: str = "http://localhost:3000"
     #: 開発時は dev サーバのポートが変わることがあるため localhost 全ポートを許可する。
     #: 本番では空文字にして cors_origins だけで運用する。
@@ -35,6 +43,13 @@ class Settings(BaseSettings):
         if not p.is_absolute():
             p = BASE_DIR / p
         p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def llm_split_cache_path(self) -> Path | None:
+        p = Path(self.llm_split_cache)
+        if not p.is_absolute():
+            p = BASE_DIR / p
         return p
 
     @property
