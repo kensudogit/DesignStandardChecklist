@@ -1,0 +1,4 @@
+﻿No,Check ID,Category,Sub Category,Check Point,Severity,Requirement,Standard ID,Source Document,Chapter,Section,Page,Condition,Exception,Result,Evidence,Reviewer,Review Date,Comment
+1,CHK-UI-001,UI,項目定義,すべての画面項目に項目IDが付与されているか？,High,すべての画面項目に項目IDが定義されている,STD-UI-001,画面設計標準,3,3.2,12,,,Pending,,,,
+2,CHK-UI-002,UI,必須表示,必須項目が画面上で識別可能になっているか？,High,必須項目は識別可能な表示とする,STD-UI-002,画面設計標準,3,3.4,14,,,Pending,,,,
+3,CHK-UI-003,UI,入力チェック,必須項目が未入力の場合にエラー表示する設計になっているか？,High,必須項目の未入力時はエラー表示する,STD-UI-002,画面設計標準,3,3.4,14,,,Pending,,,,

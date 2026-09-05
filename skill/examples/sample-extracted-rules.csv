@@ -1,0 +1,3 @@
+﻿Standard ID,Rule Type,Category,Original Rule,Normalized Requirement,Source Document,Chapter,Section,Page,Condition,Exception,Ambiguity,Notes
+STD-UI-001,Mandatory,UI/項目定義,画面項目には項目IDを付与すること,すべての画面項目に項目IDが定義されている,画面設計標準,3,3.2,12,,,,
+STD-UI-002,Mandatory,UI/入力,必須項目は識別可能な表示を行い、未入力の場合はエラー表示すること,必須項目を識別可能にし、未入力時にエラー表示する,画面設計標準,3,3.4,14,,,,Atomic Checkへ2分割
