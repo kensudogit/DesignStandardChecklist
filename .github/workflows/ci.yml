@@ -73,7 +73,9 @@ jobs:
 
       - name: シェルスクリプトの構文チェック
         shell: bash
-        run: bash -n start.sh && echo "start.sh : OK"
+        run: |
+          bash -n start.sh
+          echo "start.sh OK"
 
   frontend:
     name: Frontend (typecheck + build)
