@@ -166,13 +166,16 @@ def claude_recommendations(
         import anthropic
     except ImportError as exc:
         raise RecommendationError(
-            "anthropic SDK が未インストールです: pip install anthropic"
+            "Claude API を使うには anthropic SDK が必要です。"
+            "backend で pip install -r requirements-optional.txt を実行するか、"
+            "追加インストール不要の「観点カタログ」方式（generator=catalog）を使用してください。"
         ) from exc
 
     if not claude_available():
         raise RecommendationError(
             "ANTHROPIC_API_KEY が設定されていません。"
-            "観点カタログによる生成（generator=catalog）を使用してください。"
+            "環境変数を設定するか、APIキー不要の「観点カタログ」方式"
+            "（generator=catalog）を使用してください。"
         )
 
     categories = "、".join([c for c, _ in tx.CATEGORY_KEYWORDS])

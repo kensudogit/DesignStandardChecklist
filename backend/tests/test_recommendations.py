@@ -158,9 +158,14 @@ def test_regenerate_replaces_and_clear_removes(client: TestClient) -> None:
     assert client.get(f"/api/documents/{doc['id']}/recommendations").json() == []
 
 
-def test_claude_generator_requires_credentials(
+def test_claude_generator_fails_with_actionable_guidance(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Claude を使えない状態では、次に何をすればよいかが分かる説明を返す。
+
+    anthropic SDK は任意の依存なので、未インストールとAPIキー未設定の
+    どちらの理由もあり得る。どちらでも観点カタログへ誘導する。
+    """
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     doc = _upload(client)
@@ -169,7 +174,19 @@ def test_claude_generator_requires_credentials(
         json={"generator": "claude", "replace": True},
     )
     assert response.status_code == 422
-    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "ANTHROPIC_API_KEY" in detail or "anthropic SDK" in detail
+    assert "観点カタログ" in detail
+
+
+def test_status_hides_claude_when_unavailable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """使えない生成方式は選択肢に出さない（UI側で無効化できるようにする）。"""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    doc = _upload(client)
+    status = client.get(f"/api/documents/{doc['id']}/recommendations/status").json()
+    assert status["generators_available"] == ["catalog"]
+    assert status["claude_available"] is False
 
 
 def test_claude_response_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -222,6 +239,8 @@ def test_claude_suggestions_duplicating_the_standard_are_dropped() -> None:
 
 
 def test_claude_refusal_is_surfaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    # anthropic SDK は任意の依存なので、未インストールならスキップする
+    anthropic = pytest.importorskip("anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     class FakeMessages:
@@ -231,8 +250,6 @@ def test_claude_refusal_is_surfaced(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class FakeClient:
         messages = FakeMessages()
-
-    import anthropic
 
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: FakeClient())
 

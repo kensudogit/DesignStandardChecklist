@@ -1,5 +1,13 @@
 * text=auto eol=lf
 
+# PowerShell スクリプトは CRLF で保つ。
+# 中身の先頭にある UTF-8 BOM は Windows PowerShell 5.1 が
+# CP932 と誤認しないために必要なので、消さないこと。
+*.ps1 text eol=crlf
+
+# シェルスクリプトは実行環境が LF を要求する
+*.sh text eol=lf
+
 *.png binary
 *.jpg binary
 *.pdf binary

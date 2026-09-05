@@ -1,0 +1,9 @@
+# 任意の依存。必要になったときだけ入れてください。
+#   pip install -r requirements-optional.txt
+
+# PostgreSQL を使う場合のみ（既定の SQLite なら不要）
+psycopg[binary]==3.2.3
+
+# AI推奨事項を Claude API で生成する場合のみ
+# （観点カタログによる生成はこれ無しで動きます）
+anthropic==1.4.0

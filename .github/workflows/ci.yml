@@ -24,15 +24,56 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-optional.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # 任意の依存も入れて、Claude API 連携のテストまで実行する
+          pip install -r requirements-optional.txt
 
       - name: Run tests
         run: pytest -q
+
+  scripts:
+    name: Scripts (syntax)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PowerShell スクリプトの構文チェック
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in @('start.ps1', 'stop.ps1')) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) {
+              Write-Host "$file : 構文エラー"
+              $errors | ForEach-Object { Write-Host "  $($_.Message)" }
+              $failed = $true
+            } else {
+              Write-Host "$file : OK"
+            }
+          }
+          # Windows PowerShell 5.1 は BOM の無い UTF-8 を CP932 として読むため、
+          # 日本語を含む .ps1 には BOM が必要
+          foreach ($file in @('start.ps1', 'stop.ps1')) {
+            $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $file))
+            if ($bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) {
+              Write-Host "$file : UTF-8 BOM がありません"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: シェルスクリプトの構文チェック
+        shell: bash
+        run: bash -n start.sh && echo "start.sh : OK"
 
   frontend:
     name: Frontend (typecheck + build)

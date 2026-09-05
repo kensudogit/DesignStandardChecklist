@@ -15,3 +15,7 @@ frontend/.env.local
 
 # docker compose
 .env
+
+# start.ps1 / start.sh が出力するログ
+logs/
+.running.json

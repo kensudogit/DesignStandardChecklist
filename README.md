@@ -33,45 +33,83 @@ Claude API を使うのは「AI推奨事項」だけで、それは標準由来�
 
 ## 起動方法
 
-### Docker（推奨）
+**Docker は不要です。** Python と Node.js があれば動きます。
+データベースは SQLite を自動生成するため、事前準備はありません。
 
-```bash
-docker compose up --build
+### 必要なもの
+
+| | バージョン | 確認 | 入っていない場合 |
+|---|---|---|---|
+| Python | 3.12 以上 | `python --version` | [python.org](https://www.python.org/downloads/) / `winget install --id Python.Python.3.12 -e` |
+| Node.js | 20 以上 | `node --version` | [nodejs.org](https://nodejs.org/) / `winget install --id OpenJS.NodeJS.LTS -e` |
+
+### いちばん簡単な方法
+
+Windows（PowerShell）:
+
+```powershell
+.\start.ps1
 ```
 
-- フロントエンド: http://localhost:3000
-- バックエンド: http://localhost:8000/docs
-
-PostgreSQL 込みで起動します。ポートが他と衝突する場合は `.env.example` を `.env` にコピーし、
-`FRONTEND_PORT` / `BACKEND_PORT` を変更してください（`BACKEND_PORT` を変えたときは
-`NEXT_PUBLIC_API_BASE` も合わせて変え、frontend を再ビルドしてください。`NEXT_PUBLIC_*` は
-ビルド時にJSへ埋め込まれるためです）。
-
-### ローカル実行
-
-#### 1. バックエンド
+macOS / Linux:
 
 ```bash
-cd backend
-py -3.12 -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+./start.sh
 ```
 
-API ドキュメント: http://localhost:8000/docs
+初回は仮想環境の作成と依存関係のインストールを自動で行うため数分かかります。
+2回目以降は数秒で起動します。起動後、ブラウザが自動で開きます。
 
-#### 2. フロントエンド
+- アプリ: http://localhost:3000
+- API ドキュメント: http://localhost:8000/docs
+
+**ポートが使用中の場合は空きポートを自動で探します**（例: 3000 が塞がっていれば 3001）。
+実際に使われるポートは起動時のメッセージに表示されます。
+
+停止するには、起動したウィンドウで `Ctrl+C` を押すか:
+
+```powershell
+.\stop.ps1
+```
+
+ログは `logs/` に出力されます。起動に失敗したときはここを確認してください。
+
+> **Windows で「このシステムではスクリプトの実行が無効になっている」と出る場合**
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\start.ps1
+> ```
+>
+> または一度だけ `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` を実行してください。
+
+### 手動で起動する
+
+スクリプトを使わない場合は、ターミナルを2つ開いてください。
+
+ターミナル1（バックエンド）:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd backend && python -m venv .venv && .venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
-http://localhost:3000 を開きます。バックエンドの場所を変える場合は `frontend/.env.local` の
-`NEXT_PUBLIC_API_BASE` を変更してください。
+```bash
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+```
 
-#### 3. 試す
+ターミナル2（フロントエンド）:
+
+```bash
+cd frontend && npm install
+```
+
+```bash
+cd frontend && npm run dev
+```
+
+macOS / Linux では `.venv/Scripts/python.exe` を `.venv/bin/python` に読み替えてください。
+バックエンドのポートを変える場合は `frontend/.env.local` の `NEXT_PUBLIC_API_BASE` も合わせて変更します。
+
+### 試す
 
 `samples/画面設計標準.md` をアップロードすると、32件の規定から41件のチェック項目が生成され、
 必須規定・禁止規定の Coverage が 100% になります。
@@ -81,6 +119,33 @@ http://localhost:3000 を開きます。バックエンドの場所を変える�
 
 `samples/API設計標準.xlsx` は表形式の標準書のサンプルです（実務でよくある
 「No / 章 / 節 / 分類 / 規定内容 / 区分 / 重要度 / 備考」の列構成）。
+
+### 任意: 追加機能を使う場合
+
+```bash
+cd backend && .venv/Scripts/python.exe -m pip install -r requirements-optional.txt
+```
+
+- PostgreSQL を使う（`psycopg`）
+- AI推奨事項を Claude API で生成する（`anthropic`）
+
+どちらも使わなければインストール不要です。AI推奨事項の「観点カタログ」方式は
+追加インストールなしで動きます。
+
+### 任意: Docker で起動する
+
+Docker が入っていて、PostgreSQL 込みで動かしたい場合のみ。
+
+```bash
+docker compose up --build
+```
+
+`.env.example` を `.env` にコピーすると `FRONTEND_PORT` / `BACKEND_PORT` を変更できます
+（`BACKEND_PORT` を変えたときは `NEXT_PUBLIC_API_BASE` も合わせて変え、frontend の再ビルドが
+必要です。`NEXT_PUBLIC_*` はビルド時にJSへ埋め込まれるためです）。
+
+`use docker --context=desktop-linux buildx` というエラーが出る場合は、
+`COMPOSE_BAKE=false` を設定してから実行してください。
 
 ## Skill の原則をどう実装しているか
 
@@ -247,20 +312,21 @@ DSC_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
 
 ### データベース
 
-既定は SQLite（単独利用・お試し向け）。複数人で同時に記入する場合は PostgreSQL を指定してください。
+既定は SQLite（`backend/storage/dsc.db` に自動生成されます。準備不要）。
+複数人で同時に記入する場合は PostgreSQL を指定してください。
 SQLite は書き込みが直列化されるため、同時記入では待ちや失敗が起きやすくなります。
 
 ```bash
 DSC_DATABASE_URL=postgresql+psycopg://user:password@host:5432/dsc
 ```
 
-`docker compose` では PostgreSQL が既定で使われます。
+`psycopg` が必要なので `requirements-optional.txt` をインストールしてください。
+`docker compose` を使う場合は PostgreSQL が既定で構成されます。
 
 ## テスト
 
 ```bash
-cd backend
-.venv/Scripts/python.exe -m pytest -q
+cd backend && .venv/Scripts/python.exe -m pytest -q
 ```
 
 134件。抽出エンジンの単体テスト（`test_extraction.py`）、各入力形式のパーサ
@@ -273,9 +339,7 @@ push / PR ごとに GitHub Actions で backend のテストと frontend の type
 （[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。
 
 ```bash
-cd frontend
-npm run typecheck
-npm run build
+cd frontend && npm run typecheck
 ```
 
 ## API
