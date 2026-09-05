@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthBadge, AuthGate } from "@/components/AuthGate";
+import { GuideButton } from "@/components/GuideModal";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default function RootLayout({
               <Link className="nav-link" href="/review-sets">
                 統合レビュー表
               </Link>
+              <GuideButton />
               <AuthBadge />
             </nav>
           </div>

@@ -109,6 +109,11 @@ cd frontend && npm run dev
 macOS / Linux では `.venv/Scripts/python.exe` を `.venv/bin/python` に読み替えてください。
 バックエンドのポートを変える場合は `frontend/.env.local` の `NEXT_PUBLIC_API_BASE` も合わせて変更します。
 
+### 使い方を確認する
+
+画面右上の **「利用手順」** を押すと、登録から成果物出力までの詳細な手順、統合レビュー表・
+AI推奨事項の使い方、この生成器が守っている原則、よくある困りごとをモーダルで確認できます。
+
 ### 試す
 
 `samples/画面設計標準.md` をアップロードすると、32件の規定から41件のチェック項目が生成され、

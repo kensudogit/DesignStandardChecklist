@@ -497,3 +497,372 @@ details summary {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ============================================================================
+   利用手順モーダル
+   アップロードされたモーダルデザインに合わせた紫系のパレット。
+   アプリ本体は青系なので、干渉しないよう guide- 接頭辞で閉じている。
+   ========================================================================= */
+
+.guide {
+  /* 名前空間の目印。実際のトークンは :root ではなくここに閉じ込める。 */
+}
+
+.guide-overlay,
+.guide-panel {
+  --g-accent: #6c5ce7;
+  --g-accent-deep: #5546c9;
+  --g-accent-soft: #f1eefe;
+  --g-accent-line: #e2dcfb;
+  --g-surface: #ffffff;
+  --g-text: #1d2230;
+  --g-text-sub: #4b5563;
+  --g-text-muted: #9aa0ac;
+}
+
+.guide-trigger {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 5px;
+  border: 1px solid #d9d2fb;
+  background: #f5f2ff;
+  color: #5546c9;
+  cursor: pointer;
+}
+
+.guide-trigger:hover {
+  background: #ece7ff;
+  border-color: #6c5ce7;
+}
+
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(19, 16, 46, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.guide-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 620px;
+  max-height: min(88vh, 900px);
+  background: var(--g-surface);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(16, 12, 45, 0.35);
+  overflow: hidden;
+  color: var(--g-text);
+}
+
+/* --- ヘッダー --- */
+
+.guide-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #eceaf3;
+  background: var(--g-surface);
+  flex-shrink: 0;
+}
+
+.guide-bar {
+  width: 4px;
+  height: 30px;
+  border-radius: 2px;
+  background: var(--g-accent);
+  flex-shrink: 0;
+}
+
+.guide-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.guide-menu > span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: #3c4250;
+}
+
+.guide-menu > span:last-child {
+  width: 11px;
+}
+
+.guide-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.guide-eyebrow {
+  margin: 2px 0 0;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--g-text-muted);
+  white-space: nowrap;
+}
+
+.guide-spacer {
+  flex: 1;
+}
+
+.guide-scroll-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--g-accent);
+  white-space: nowrap;
+}
+
+.guide-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid #e3e1ec;
+  background: var(--g-surface);
+  color: #3c4250;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.guide-close:hover {
+  background: #f5f4fa;
+}
+
+/* --- 本文 --- */
+
+.guide-body {
+  overflow-y: auto;
+  padding: 18px;
+  background: #fbfaff;
+}
+
+.guide-card {
+  border: 1px solid var(--g-accent-line);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 14px;
+  background: var(--g-surface);
+}
+
+.guide-card-hero {
+  background: #f8f6ff;
+}
+
+.guide-card-arch {
+  background: var(--g-accent-soft);
+}
+
+.guide-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guide-card-eyebrow {
+  margin: 0 0 6px;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--g-accent);
+}
+
+.guide-card-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--g-text-sub);
+}
+
+.guide-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.guide-badge-row h3 {
+  margin: 0;
+}
+
+.guide-badge {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--g-accent);
+  color: #fff;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.guide-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.guide-tag {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--g-accent-line);
+  background: var(--g-surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4c4a7a;
+}
+
+.guide-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.95;
+  color: var(--g-text-sub);
+}
+
+.guide-list li::marker {
+  color: var(--g-accent);
+}
+
+.guide-section-label {
+  margin: 22px 0 10px;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--g-text-muted);
+}
+
+/* --- 番号付きステップ --- */
+
+.guide-step {
+  display: flex;
+  gap: 14px;
+  border: 1px solid #e9e7f2;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--g-surface);
+}
+
+.guide-step-no {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: linear-gradient(140deg, #7d6df0, #5546c9);
+  color: #fff;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.guide-step-main {
+  min-width: 0;
+}
+
+.guide-step-main h3 {
+  margin: 4px 0 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.guide-step-main p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.9;
+  color: var(--g-text-sub);
+}
+
+.guide-note {
+  margin-top: 10px !important;
+  padding: 9px 12px;
+  border-left: 3px solid var(--g-accent);
+  border-radius: 0 8px 8px 0;
+  background: #f6f4ff;
+  font-size: 12px !important;
+  line-height: 1.8 !important;
+  color: #4a4670 !important;
+}
+
+/* --- FAQ --- */
+
+.guide-faq {
+  margin: 0;
+}
+
+.guide-faq > div + div {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #efedf7;
+}
+
+.guide-faq dt {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.guide-faq dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.9;
+  color: var(--g-text-sub);
+}
+
+.guide-footnote {
+  margin: 18px 0 4px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--g-text-muted);
+  text-align: center;
+}
+
+.guide-footnote code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #efedf7;
+  color: #4c4a7a;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 11.5px;
+}
+
+@media (max-width: 560px) {
+  .guide-overlay {
+    padding: 0;
+  }
+
+  .guide-panel {
+    max-width: none;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .guide-scroll-hint {
+    display: none;
+  }
+}
