@@ -1,9 +1,12 @@
 import type {
   AdoptionValue,
+  AuthStatus,
+  AuthUser,
   ChecklistItem,
   ConsolidatedCheck,
   Coverage,
   Meta,
+  LoginResponse,
   Recommendation,
   RecommendationStatus,
   ResultValue,
@@ -27,6 +30,34 @@ export interface ReviewUpdate {
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "http://localhost:8000";
 
+const TOKEN_KEY = "dsc.token";
+
+/** ログイントークン。認証が無効なら常に null で、ヘッダも付かない。 */
+export const auth = {
+  get(): string | null {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set(token: string) {
+    try {
+      window.localStorage.setItem(TOKEN_KEY, token);
+    } catch {
+      /* プライベートモード等では保持できない。その場合はセッション内のみ有効。 */
+    }
+  },
+  clear() {
+    try {
+      window.localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* 同上 */
+    }
+  },
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -38,17 +69,27 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = auth.get();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       cache: "no-store",
       ...init,
+      headers,
     });
   } catch {
     throw new ApiError(
       `バックエンド (${API_BASE}) へ接続できません。FastAPI を起動しているか確認してください。`,
       0,
     );
+  }
+
+  if (response.status === 401) {
+    // 期限切れ・無効なトークンは持ち続けても意味がないので捨てる
+    auth.clear();
   }
 
   if (!response.ok) {
@@ -68,6 +109,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   meta: () => request<Meta>("/api/meta"),
+
+  // --- 認証 ---
+
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+
+  login: (username: string, password: string) =>
+    request<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    }),
+
+  createUser: (payload: {
+    username: string;
+    password: string;
+    display_name?: string;
+    is_admin?: boolean;
+  }) =>
+    request<AuthUser>("/api/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
   listDocuments: () => request<StandardDocument[]>("/api/documents"),
 

@@ -260,3 +260,24 @@ export interface ReviewSetCoverage {
   cross_document_similar: number;
   findings: string[];
 }
+
+// --- 認証 (DSC_AUTH_ENABLED=true のときのみ使う) ---
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  display_name: string;
+  is_admin: boolean;
+}
+
+export interface AuthStatus {
+  auth_enabled: boolean;
+  needs_bootstrap: boolean;
+  user: AuthUser | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  expires_in: number;
+  user: AuthUser;
+}

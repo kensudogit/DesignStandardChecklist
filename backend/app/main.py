@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analysis, documents, exports, recommendations, review_sets
+from app.api import analysis, auth, documents, exports, recommendations, review_sets
 from app.config import get_settings
 from app.core import taxonomy as tx
 from app.core.parsers import SUPPORTED_EXTENSIONS
@@ -16,6 +16,18 @@ from app.schemas import DocumentTypeOption, MetaOut
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    settings = get_settings()
+    if settings.auth_enabled:
+        if not settings.secret_key:
+            raise RuntimeError(
+                "DSC_AUTH_ENABLED=true には DSC_SECRET_KEY が必要です。"
+                "推測されない十分に長いランダム文字列を設定してください。"
+            )
+        from app.api.auth import bootstrap_admin
+        from app.db import SessionLocal
+
+        with SessionLocal() as db:
+            bootstrap_admin(db)
     yield
 
 
@@ -40,6 +52,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(analysis.router)
 app.include_router(exports.router)
@@ -49,6 +62,7 @@ app.include_router(review_sets.router)
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
+    """認証の有無にかかわらず疎通確認できるようにしておく (死活監視用)。"""
     return {"status": "ok"}
 
 

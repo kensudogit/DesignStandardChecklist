@@ -25,7 +25,7 @@
 | バックエンド | Python 3.12 / FastAPI / SQLAlchemy / SQLite | [`backend/`](backend) |
 | フロントエンド | Next.js (App Router) / React / TypeScript | [`frontend/`](frontend) |
 | 元Skill | SKILL.md・テンプレート・変換ルール | [`skill/`](skill) |
-| サンプル標準書 | 画面設計標準 / 詳細設計標準 / DB設計標準 | [`samples/`](samples) |
+| サンプル標準書 | 画面設計標準 / 詳細設計標準 / DB設計標準 / API設計標準(Excel) | [`samples/`](samples) |
 
 抽出エンジンは **決定的（ルールベース）** です。LLM に依存しないため、同じ標準書からは常に同じ
 チェックリストが生成され、すべてのチェック項目が標準書の原文に紐づきます。
@@ -33,7 +33,23 @@ Claude API を使うのは「AI推奨事項」だけで、それは標準由来�
 
 ## 起動方法
 
-### 1. バックエンド
+### Docker（推奨）
+
+```bash
+docker compose up --build
+```
+
+- フロントエンド: http://localhost:3000
+- バックエンド: http://localhost:8000/docs
+
+PostgreSQL 込みで起動します。ポートが他と衝突する場合は `.env.example` を `.env` にコピーし、
+`FRONTEND_PORT` / `BACKEND_PORT` を変更してください（`BACKEND_PORT` を変えたときは
+`NEXT_PUBLIC_API_BASE` も合わせて変え、frontend を再ビルドしてください。`NEXT_PUBLIC_*` は
+ビルド時にJSへ埋め込まれるためです）。
+
+### ローカル実行
+
+#### 1. バックエンド
 
 ```bash
 cd backend
@@ -44,7 +60,7 @@ py -3.12 -m venv .venv
 
 API ドキュメント: http://localhost:8000/docs
 
-### 2. フロントエンド
+#### 2. フロントエンド
 
 ```bash
 cd frontend
@@ -55,13 +71,16 @@ npm run dev
 http://localhost:3000 を開きます。バックエンドの場所を変える場合は `frontend/.env.local` の
 `NEXT_PUBLIC_API_BASE` を変更してください。
 
-### 3. 試す
+#### 3. 試す
 
 `samples/画面設計標準.md` をアップロードすると、32件の規定から41件のチェック項目が生成され、
 必須規定・禁止規定の Coverage が 100% になります。
 
-3つのサンプルをすべて登録したうえで「統合レビュー表」から横断チェックリストを作ると、
+3つのMarkdownサンプルをすべて登録したうえで「統合レビュー表」から横断チェックリストを作ると、
 標準書をまたいで完全に重複する3件が統合され、88件の統合チェックリストになります。
+
+`samples/API設計標準.xlsx` は表形式の標準書のサンプルです（実務でよくある
+「No / 章 / 節 / 分類 / 規定内容 / 区分 / 重要度 / 備考」の列構成）。
 
 ## Skill の原則をどう実装しているか
 
@@ -88,6 +107,15 @@ SKILL.md の「必須原則」「禁止事項」は、そのままコードと�
 PDF（テキスト埋め込み）・Word (.docx)・Excel (.xlsx)・Markdown・テキスト・CSV。
 `.doc` / `.xls` は変換を促すエラーを返します。画像PDFはOCR済みPDFを使うよう案内します。
 テキストは UTF-8 / CP932 / EUC-JP を自動判別します。
+
+**表形式（Excel）の標準書**は列の役割を判定します。「規定内容」列だけを規定文として扱い、
+「章」「節」「分類」「区分」「重要度」「備考」の各列は標準書自身の記載として取り込みます
+（推測ではないため、Coverage や重要度の根拠として使えます）。
+
+- 区分列（必須 / 禁止 / 推奨 / 任意 / 条件付き必須）→ 規範レベル
+- 重要度列（重大 / 高 / 中 / 低）→ Severity。キーワード推定より優先されます（STEP 10）
+- ただし**本文が明示的な禁止表現なら、区分列が「必須」でも禁止として扱います**（必須原則 7）
+- 「規定内容」に相当する列を判定できない表は、従来どおり行を連結して扱います
 
 ### 生成される成果物（STEP 14）
 
@@ -202,6 +230,32 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 コメントを直接編集でき、変更は即座に保存されます。
 **再解析しても記入済みの内容は Check ID を手がかりに引き継がれます。**
 
+### 認証（既定は無効）
+
+単独利用ではログイン不要のまま使えます。複数人でレビュー記入する場合は有効にしてください。
+
+```bash
+DSC_AUTH_ENABLED=true
+DSC_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+```
+
+- 有効にすると、`/api/health` を除く全APIがログイン必須になります
+- 最初のアクセス時に画面から管理者アカウントを作成します（環境変数で初期管理者を指定することも可能）
+- パスワードは `hashlib.scrypt`、セッションは HMAC-SHA256 署名トークン。追加の依存はありません
+- **判定を記録すると Reviewer 欄がログイン利用者で自動補完されます**（明示入力があればそちらを尊重）
+- 利用者の追加は管理者のみ
+
+### データベース
+
+既定は SQLite（単独利用・お試し向け）。複数人で同時に記入する場合は PostgreSQL を指定してください。
+SQLite は書き込みが直列化されるため、同時記入では待ちや失敗が起きやすくなります。
+
+```bash
+DSC_DATABASE_URL=postgresql+psycopg://user:password@host:5432/dsc
+```
+
+`docker compose` では PostgreSQL が既定で使われます。
+
 ## テスト
 
 ```bash
@@ -209,10 +263,14 @@ cd backend
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-84件。抽出エンジンの単体テスト（`test_extraction.py`）、各入力形式のパーサ
-（`test_parsers.py`）、アップロード〜出力までの結合テスト（`test_api.py`）、
-横断チェックリスト（`test_review_sets.py`）、AI推奨事項の分離（`test_recommendations.py`）
-を含みます。
+134件。抽出エンジンの単体テスト（`test_extraction.py`）、各入力形式のパーサ
+（`test_parsers.py`）、表形式の標準書と規範表現の語彙（`test_table_standards.py`）、
+アップロード〜出力までの結合テスト（`test_api.py`）、横断チェックリスト
+（`test_review_sets.py`）、AI推奨事項の分離（`test_recommendations.py`）、
+認証（`test_auth.py`）を含みます。
+
+push / PR ごとに GitHub Actions で backend のテストと frontend の typecheck・build が走ります
+（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。
 
 ```bash
 cd frontend
@@ -224,6 +282,10 @@ npm run build
 
 | メソッド | パス | 説明 |
 |---|---|---|
+| GET | `/api/health` | 死活監視（認証が有効でも認証不要） |
+| GET | `/api/auth/status` | 認証の有効/無効、初期セットアップの要否、ログイン中の利用者 |
+| POST | `/api/auth/login` | ログイン（セッショントークンを返す） |
+| GET / POST | `/api/auth/users` | 利用者の一覧 / 追加（1人目のみ未認証で作成可） |
 | GET | `/api/meta` | 文書種別・規範レベル・重要度などの語彙 |
 | GET / POST | `/api/documents` | 標準書の一覧 / 登録（登録時に自動解析） |
 | GET / PATCH / DELETE | `/api/documents/{id}` | 標準書の参照 / メタ情報更新 / 削除 |
@@ -252,6 +314,9 @@ npm run build
 - **形態素解析を使っていません。** 規範表現は `backend/app/core/taxonomy.py` の語彙リストと
   文末パターンで判定します。組織固有の言い回しがある場合は、このファイルに語を足してください。
   分類のロジックはすべてこの1ファイルに集約しています。
+- **動詞の活用は限定的です。** 一段動詞（含める・設ける・定める等）とサ変は「〜しているか？」へ
+  活用しますが、五段動詞は語によって音便が変わるため活用せず、どの動詞でも成立する
+  「〜することとしているか？」の形にしています。読みにくさより誤った活用を避けることを優先しました。
 - **画像PDF（スキャンPDF）は解析できません。** OCR済みのPDFを使用してください。
 - **Word / Excel / Markdown からはページ番号を取得できません。** 「不明」と表示され、
   推測値は入りません。Excel はシート名と行番号を所在として記録します。
@@ -260,5 +325,5 @@ npm run build
 - **AI推奨事項の `claude` 方式には API キーと課金が必要です。** キーが無い場合は
   `catalog` 方式（観点カタログ）を使ってください。生成結果が標準書と重複していないかは
   機械的に除外していますが、提案の妥当性は人が判断してください。
-- 認証はありません。ローカル/社内での利用を想定しています。
-- SQLite を使用しています。同時に多人数でレビュー記入する場合は PostgreSQL への変更を推奨します。
+- **認証は最小限です。** パスワードログインとセッショントークンのみで、SSO・パスワードリセット・
+  監査ログはありません。インターネットに公開する場合はリバースプロキシ側での保護も併用してください。

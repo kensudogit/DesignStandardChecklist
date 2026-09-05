@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_user
 from app.config import get_settings
 from app.core import taxonomy as tx
 from app.core.parsers import SUPPORTED_EXTENSIONS, ParseError
@@ -18,7 +19,7 @@ from app.db import get_db
 from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument
 from app.schemas import DocumentMetaUpdate, DocumentOut
 
-router = APIRouter(prefix="/api/documents", tags=["documents"])
+router = APIRouter(prefix="/api/documents", tags=["documents"], dependencies=[Depends(current_user)])
 
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 UNKNOWN = "不明"

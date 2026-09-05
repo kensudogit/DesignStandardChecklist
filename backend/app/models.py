@@ -242,3 +242,22 @@ class ConsolidatedCheck(Base):
 
     review_set: Mapped[ReviewSet] = relationship(back_populates="checks")
     primary_item: Mapped[ChecklistItem] = relationship()
+
+
+class User(Base):
+    """レビュー担当者。auth_enabled のときだけ使う。
+
+    誰が判定したのかを Reviewer 欄と結び付けるため、共有トークンではなく
+    個人アカウントにしている。
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

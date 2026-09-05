@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.analysis import _items, _rules
+from app.api.auth import current_user
 from app.api.documents import get_document
 from app.core import recommender
 from app.core.recommender import RecommendationError
@@ -24,7 +25,7 @@ from app.schemas import (
     RecommendationUpdate,
 )
 
-router = APIRouter(prefix="/api/documents/{document_id}/recommendations", tags=["recommendations"])
+router = APIRouter(prefix="/api/documents/{document_id}/recommendations", tags=["recommendations"], dependencies=[Depends(current_user)])
 
 SEPARATION_NOTE = (
     "AI推奨事項は標準書由来ではありません。チェックリスト・トレーサビリティ・"

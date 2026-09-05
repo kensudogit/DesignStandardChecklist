@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_user
 from app.api.documents import get_document
 from app.core import taxonomy as tx
 from app.core.coverage import CoverageResult, compute_coverage
 from app.db import get_db
-from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument
+from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument, User
 from app.schemas import (
     ChecklistItemOut,
     ChecklistItemUpdate,
@@ -22,9 +23,22 @@ from app.schemas import (
     UnconvertedRow,
 )
 
-router = APIRouter(prefix="/api/documents/{document_id}", tags=["analysis"])
+router = APIRouter(prefix="/api/documents/{document_id}", tags=["analysis"], dependencies=[Depends(current_user)])
 
 UNKNOWN = "不明"
+
+
+def apply_reviewer(data: dict, item, user: User | None) -> dict:
+    """判定を記録したのが誰かを残す。
+
+    認証が有効なら、Reviewer 未入力のときにログイン利用者で補う。
+    明示的に入力された値は上書きしない（代理入力を妨げないため）。
+    """
+    if user is None or "result" not in data:
+        return data
+    if not data.get("reviewer") and not item.reviewer:
+        data["reviewer"] = user.display_name or user.username
+    return data
 
 
 def _rules(db: Session, document_pk: int) -> list[Rule]:
@@ -109,11 +123,13 @@ def update_checklist_item(
     payload: ChecklistItemUpdate,
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
+    user: User | None = Depends(current_user),
 ) -> ChecklistItemOut:
     item = db.get(ChecklistItem, item_id)
     if item is None or item.document_pk != doc.id:
         raise HTTPException(status_code=404, detail="チェック項目が見つかりません")
-    for key, value in payload.model_dump(exclude_none=True).items():
+    data = apply_reviewer(payload.model_dump(exclude_none=True), item, user)
+    for key, value in data.items():
         setattr(item, key, value)
     db.commit()
     db.refresh(item)

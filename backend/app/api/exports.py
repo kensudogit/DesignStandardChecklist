@@ -12,12 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.analysis import _coverage_result, _items, _rules
+from app.api.auth import current_user
 from app.api.documents import get_document
 from app.core import exporter
 from app.db import get_db
 from app.models import Recommendation, StandardDocument
 
-router = APIRouter(prefix="/api/documents/{document_id}/export", tags=["export"])
+router = APIRouter(prefix="/api/documents/{document_id}/export", tags=["export"], dependencies=[Depends(current_user)])
 
 ARTIFACTS = (
     "standard-register",

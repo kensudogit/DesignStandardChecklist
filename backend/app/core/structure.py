@@ -35,6 +35,11 @@ class Located:
     order: int
     #: 見出し行そのものか (規定候補から除外する)
     is_heading: bool = False
+    # --- 表形式の標準書が列として持っていた情報 (推測ではなく記載そのもの) ---
+    category_hint: str | None = None
+    rule_type_hint: str | None = None
+    severity_hint: str | None = None
+    note_hint: str | None = None
 
 
 def _is_headingish(block: Block) -> bool:
@@ -86,20 +91,36 @@ def assign_structure(blocks: list[Block]) -> list[Located]:
                             section, section_title = None, text
                         matched_heading = True
 
-        parts = [p for p in (chapter_title or (f"第{chapter}章" if chapter else None), section_title) if p]
+        # 表の行が自前で章・節を持っている場合は、見出しの追跡結果より優先する
+        row_chapter = block.chapter or chapter
+        row_section = block.section or section
+        row_section_title = section_title if block.section is None else None
+
+        parts = [
+            p
+            for p in (
+                chapter_title or (f"第{row_chapter}章" if row_chapter else None),
+                block.category_hint or row_section_title,
+            )
+            if p
+        ]
         heading_path = " > ".join(parts)
 
         out.append(
             Located(
                 text=text,
                 page=block.page,
-                chapter=chapter,
-                section=section,
+                chapter=row_chapter,
+                section=row_section,
                 heading_path=heading_path,
                 is_table=block.is_table,
                 locator=block.locator,
                 order=order,
                 is_heading=matched_heading,
+                category_hint=block.category_hint,
+                rule_type_hint=block.rule_type_hint,
+                severity_hint=block.severity_hint,
+                note_hint=block.note_hint,
             )
         )
 

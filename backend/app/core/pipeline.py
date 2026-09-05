@@ -101,7 +101,7 @@ def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
             condition=item.condition,
             exception=item.exception,
             ambiguity=item.ambiguity,
-            notes="",
+            notes=item.notes or "",
             explicit_severity=item.explicit_severity,
             matched_markers=item.matched_markers,
             order_index=item.order,

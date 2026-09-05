@@ -9,7 +9,8 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.analysis import _coverage_result, _items
+from app.api.auth import current_user
+from app.api.analysis import _coverage_result, _items, apply_reviewer
 from app.core import taxonomy as tx
 from app.core.consolidate import ConsolidatedRow, consolidate, sources_of
 from app.db import get_db
@@ -20,6 +21,7 @@ from app.models import (
     ReviewSetDocument,
     Rule,
     StandardDocument,
+    User,
 )
 from app.schemas import (
     ChecklistItemUpdate,
@@ -33,7 +35,7 @@ from app.schemas import (
     ReviewSetUpdate,
 )
 
-router = APIRouter(prefix="/api/review-sets", tags=["review-sets"])
+router = APIRouter(prefix="/api/review-sets", tags=["review-sets"], dependencies=[Depends(current_user)])
 
 
 def get_review_set(review_set_id: int, db: Session = Depends(get_db)) -> ReviewSet:
@@ -259,6 +261,7 @@ def update_consolidated_item(
     payload: ChecklistItemUpdate,
     review_set: ReviewSet = Depends(get_review_set),
     db: Session = Depends(get_db),
+    user: User | None = Depends(current_user),
 ) -> ConsolidatedCheckOut:
     """記入内容は統合元のチェック項目すべてへ書き戻す。
 
@@ -269,13 +272,13 @@ def update_consolidated_item(
     if stored is None or stored.review_set_pk != review_set.id:
         raise HTTPException(status_code=404, detail="チェック項目が見つかりません")
 
-    data = payload.model_dump(exclude_none=True)
+    raw = payload.model_dump(exclude_none=True)
     targets = [db.get(ChecklistItem, stored.primary_item_pk)]
     targets += [db.get(ChecklistItem, pk) for pk in stored.merged_item_pks]
     for item in targets:
         if item is None:
             continue
-        for key, value in data.items():
+        for key, value in apply_reviewer(dict(raw), item, user).items():
             setattr(item, key, value)
     db.commit()
     return _row_out(db, stored, _name_map(db, review_set))

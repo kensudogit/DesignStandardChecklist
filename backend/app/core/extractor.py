@@ -16,6 +16,13 @@ from app.core.structure import Located
 LEADING_BULLET = re.compile(r"^\s*(?:[-*・●○◆■□▪]|[（(]?\d+[)）.]|[ａ-ｚa-z][)）.])\s*")
 
 MANDATORY_END = re.compile(tx.MANDATORY_END_PATTERN)
+
+#: え段のかな。直前にこれが来る「る」は一段動詞 (含める / 設ける / 加える …)。
+E_ROW_KANA = frozenset("えけげせぜてでねへべぺめれ")
+
+
+def _is_hiragana(char: str) -> bool:
+    return "ぁ" <= char <= "ゟ"
 OPTIONAL_END = re.compile(tx.OPTIONAL_END_PATTERN)
 
 
@@ -48,13 +55,22 @@ def _strip_tail(text: str) -> str:
     return text.strip().rstrip("。．.")
 
 
-def classify_rule_type(text: str) -> tuple[str | None, list[str]]:
-    """規範レベルを判定する。どのマーカーにも当たらなければ None (規定候補ではない)。"""
+def classify_rule_type(
+    text: str, rule_type_hint: str | None = None
+) -> tuple[str | None, list[str]]:
+    """規範レベルを判定する。どのマーカーにも当たらなければ None (規定候補ではない)。
+
+    rule_type_hint は表形式の標準書の「区分」列。標準書自身の分類なので原則それに従うが、
+    本文に明示的な禁止表現がある場合だけは本文を優先する (必須原則 7: 禁止を取りこぼさない)。
+    """
     body = _strip_tail(text)
 
     prohibited = _contains(body, tx.PROHIBITED_MARKERS)
     if prohibited:
         return "Prohibited", prohibited
+
+    if rule_type_hint:
+        return rule_type_hint, [f"区分列:{rule_type_hint}"]
 
     mandatory = _contains(body, tx.MANDATORY_MARKERS)
     if MANDATORY_END.search(body):
@@ -87,11 +103,25 @@ def classify_rule_type(text: str) -> tuple[str | None, list[str]]:
     return None, []
 
 
-def infer_category(text: str, heading_path: str) -> str:
-    haystack = f"{heading_path} {text}"
+def _match_category(haystack: str) -> str | None:
     for category, keywords in tx.CATEGORY_KEYWORDS:
         if any(k in haystack for k in keywords):
             return category
+    return None
+
+
+def infer_category(text: str, heading_path: str, category_hint: str | None = None) -> str:
+    """分類を決める。
+
+    表形式の標準書が「分類」列を持っているならそれが標準書自身の分類なので最優先。
+    次に規定文そのもの。見出しは最後 (文書名が全行に効いて細かい分類を潰すため)。
+    """
+    for candidate in (category_hint, text, heading_path):
+        if not candidate:
+            continue
+        matched = _match_category(candidate)
+        if matched:
+            return matched
     return tx.DEFAULT_CATEGORY
 
 
@@ -125,21 +155,28 @@ def detect_explicit_severity(text: str) -> str | None:
     return None
 
 
-#: 禁止規定の語尾 → (除去する語尾, 質問の接尾)
+#: 禁止規定の語尾 → 語幹に付け替える表現。長い語尾から順に判定する。
+#: 五段動詞の活用は語によって変わるため、語幹をそのまま活かせる形だけを使う。
 PROHIBITED_ENDINGS: tuple[tuple[str, str], ...] = (
-    ("としてはならない", "としない"),
-    ("としてはいけない", "としない"),
-    ("してはならない", "しない"),
-    ("してはいけない", "しない"),
-    ("てはならない", "ない"),
-    ("てはいけない", "ない"),
-    ("しないこと", "しない"),
-    ("は禁止する", "を行わない"),
-    ("を禁止する", "を行わない"),
-    ("禁止する", "を行わない"),
-    ("禁止とする", "を行わない"),
-    ("は禁止", "を行わない"),
-    ("を禁止", "を行わない"),
+    ("としてはならない", "としないこととしている"),
+    ("としてはいけない", "としないこととしている"),
+    ("してはならない", "しない設計になっている"),
+    ("してはいけない", "しない設計になっている"),
+    ("べきではない", "ことがない設計になっている"),
+    ("べきでない", "ことがない設計になっている"),
+    ("てはならない", "ない設計になっている"),
+    ("てはいけない", "ない設計になっている"),
+    ("しないこと", "しない設計になっている"),
+    ("は避けること", "を避けた設計になっている"),
+    ("を避けること", "を避けた設計になっている"),
+    ("は認めない", "を行わない設計になっている"),
+    ("は許容しない", "を行わない設計になっている"),
+    ("は禁止する", "を行わない設計になっている"),
+    ("を禁止する", "を行わない設計になっている"),
+    ("禁止する", "を行わない設計になっている"),
+    ("禁止とする", "を行わない設計になっている"),
+    ("は禁止", "を行わない設計になっている"),
+    ("を禁止", "を行わない設計になっている"),
 )
 
 
@@ -148,14 +185,19 @@ def normalize_requirement(text: str, rule_type: str) -> str:
     s = _strip_tail(text)
 
     if rule_type == "Prohibited":
-        for ending, negated in PROHIBITED_ENDINGS:
+        # 「〜すべきではない」は、サ変 (名詞+する) か五段動詞かで語幹の切り方が変わる。
+        # 「す」の直前がひらがなでなければサ変とみなす (共有すべき / 握りつぶすべき)。
+        if s.endswith("すべきではない"):
+            stem = s[: -len("べきではない")]
+            before = stem[-2] if len(stem) >= 2 else ""
+            if before and not _is_hiragana(before):
+                stem = stem[:-1] + "する"
+            return stem + "ことがない設計になっている"
+
+        for ending, suffix in PROHIBITED_ENDINGS:
             if s.endswith(ending):
-                stem = s[: -len(ending)]
-                # 「〜設計としてはならない」で「設計としない設計」と重複するのを避ける
-                if negated == "としない" and stem.endswith(("設計", "構成", "方式")):
-                    return f"{stem}としないこととしている"
-                return f"{stem}{negated}設計になっている"
-        return f"{s}（禁止規定）に違反していない"
+                return s[: -len(ending)] + suffix
+        return f"{s}という禁止規定に適合している"
 
     replacements = [
         ("しなければならない", "している"),
@@ -170,11 +212,7 @@ def normalize_requirement(text: str, rule_type: str) -> str:
         ("推奨する", "としている"),
         ("が望ましい", "としている"),
         ("すること", "している"),
-        ("けること", "けている"),
         ("うこと", "っている"),
-        ("ること", "っている"),
-        ("こと", "ている"),
-        ("とする", "としている"),
         ("記載する", "記載している"),
         ("記述する", "記述している"),
         ("定義する", "定義している"),
@@ -190,6 +228,21 @@ def normalize_requirement(text: str, rule_type: str) -> str:
     for old, new in replacements:
         if s.endswith(old):
             return s[: -len(old)] + new
+
+    if s.endswith("ること"):
+        stem = s[: -len("ること")]
+        # 「える」「ける」「める」等 (え段+る) は一段動詞なので「〜ている」に活用できる
+        if stem and stem[-1] in E_ROW_KANA:
+            return stem + "ている"
+        # 五段動詞は促音便・撥音便が語によって変わるため活用しない。
+        # どの動詞でも成立する「〜こととしている」に寄せる。
+        return s + "としている"
+
+    if s.endswith("こと"):
+        return s + "としている"
+
+    if s.endswith("とする"):
+        return s[: -len("とする")] + "としている"
     return s
 
 
@@ -219,13 +272,13 @@ def extract_rules(located: list[Located]) -> list[ExtractedRule]:
                 continue
             if len(sentence) < 6:
                 continue
-            rule_type, markers = classify_rule_type(sentence)
+            rule_type, markers = classify_rule_type(sentence, item.rule_type_hint)
             if rule_type is None:
                 continue
             body = _strip_tail(sentence)
             rule = ExtractedRule(
                 rule_type=rule_type,
-                category=infer_category(sentence, item.heading_path),
+                category=infer_category(sentence, item.heading_path, item.category_hint),
                 original_rule=body,
                 normalized_requirement=normalize_requirement(body, rule_type),
                 chapter=item.chapter,
@@ -237,7 +290,9 @@ def extract_rules(located: list[Located]) -> list[ExtractedRule]:
                 ambiguity=detect_ambiguity(body),
                 locator=item.locator,
                 order=item.order,
-                explicit_severity=detect_explicit_severity(body),
+                notes=item.note_hint,
+                # STEP 10: 標準書に重要度の定義があればそれを優先する
+                explicit_severity=item.severity_hint or detect_explicit_severity(body),
                 matched_markers=markers,
             )
             rules.append(rule)

@@ -3,6 +3,8 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
 sqlalchemy==2.0.36
+# PostgreSQL を使う場合のみ必要 (既定の SQLite なら不要)
+psycopg[binary]==3.2.3
 python-multipart==0.0.20
 pypdf==5.1.0
 python-docx==1.1.2

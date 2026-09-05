@@ -1,0 +1,72 @@
+# docker compose up --build で backend + frontend + PostgreSQL が起動する。
+#
+#   frontend  http://localhost:3000
+#   backend   http://localhost:8000/docs
+#
+# ポートが他のプロジェクトと衝突する場合は .env の FRONTEND_PORT / BACKEND_PORT を変える。
+# BACKEND_PORT を変えたときは NEXT_PUBLIC_API_BASE も合わせて変え、frontend を再ビルドする
+# (NEXT_PUBLIC_* はビルド時にJSへ埋め込まれるため)。
+#
+# 認証を有効にする場合は .env に DSC_AUTH_ENABLED / DSC_SECRET_KEY を設定する。
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dsc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dsc-local-password}
+      POSTGRES_DB: dsc
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dsc -d dsc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # 既定では外に出さない。psql で直接触りたいときだけコメントを外す。
+    # ports:
+    #   - "5432:5432"
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DSC_DATABASE_URL: postgresql+psycopg://dsc:${POSTGRES_PASSWORD:-dsc-local-password}@db:5432/dsc
+      DSC_STORAGE_DIR: /app/storage/uploads
+      DSC_CORS_ORIGINS: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      # 認証 (既定は無効)
+      DSC_AUTH_ENABLED: ${DSC_AUTH_ENABLED:-false}
+      DSC_SECRET_KEY: ${DSC_SECRET_KEY:-}
+      DSC_BOOTSTRAP_ADMIN_USERNAME: ${DSC_BOOTSTRAP_ADMIN_USERNAME:-}
+      DSC_BOOTSTRAP_ADMIN_PASSWORD: ${DSC_BOOTSTRAP_ADMIN_PASSWORD:-}
+      # AI推奨事項を Claude API で生成する場合のみ
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - uploads:/app/storage/uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # ブラウザから見えるURLなので、コンテナ名ではなくホスト側のURLを渡す
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  db-data:
+  uploads:
