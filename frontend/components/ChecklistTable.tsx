@@ -26,6 +26,8 @@ interface Props {
   meta: Meta | null;
   hasPageNumbers: boolean;
   onChanged: (item: ChecklistItem) => void;
+  /** 初期の検索語。統合レビュー表の出典から開いたときに該当項目へ絞る。 */
+  initialQuery?: string;
 }
 
 export function ChecklistTable({
@@ -34,11 +36,12 @@ export function ChecklistTable({
   meta,
   hasPageNumbers,
   onChanged,
+  initialQuery = "",
 }: Props) {
   const [severity, setSeverity] = useState("");
   const [category, setCategory] = useState("");
   const [result, setResult] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**

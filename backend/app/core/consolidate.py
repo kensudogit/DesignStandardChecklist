@@ -78,14 +78,17 @@ def consolidate(
     return rows
 
 
-def sources_of(row: ConsolidatedRow, name_by_document_pk: dict[int, str]) -> list[dict[str, str]]:
+def sources_of(row: ConsolidatedRow, name_by_document_pk: dict[int, str]) -> list[dict]:
     """STEP 12: 1チェック項目に紐づく出典（複数標準書に跨りうる）。"""
-    out: list[dict[str, str]] = []
+    out: list[dict] = []
     for item in row.all_items:
         rule = item.rule
         page = rule.page if rule.page is not None else rule.locator
         out.append(
             {
+                # 画面から出典の標準書へ辿れるようにする。文書名では特定できない
+                # (同名の標準書が複数登録されうる)
+                "document_id": item.document_pk,
                 "check_id": item.check_id,
                 "standard_id": rule.standard_id,
                 "source_document": name_by_document_pk.get(item.document_pk, "不明"),

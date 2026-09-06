@@ -9,6 +9,7 @@
  */
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { ChecklistTable } from "@/components/ChecklistTable";
@@ -60,6 +61,10 @@ const ARTIFACTS: { artifact: string; label: string }[] = [
 ];
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  // 統合レビュー表の出典から ?check=CHK-xxx で開かれることがある。
+  // その場合はチェックリストを該当項目へ絞り込んで見せる
+  const focusedCheck = useSearchParams().get("check") ?? "";
+
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [tab, setTab] = useState<TabKey>("checklist");
 
@@ -283,6 +288,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           meta={meta}
           hasPageNumbers={doc.has_page_numbers}
           onChanged={handleItemChanged}
+          initialQuery={focusedCheck}
         />
       )}
       {tab === "rules" && <RulesTable rules={rules} />}

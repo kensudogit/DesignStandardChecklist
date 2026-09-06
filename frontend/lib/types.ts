@@ -271,6 +271,8 @@ export interface ReviewSet {
 
 /** 統合チェック項目の出典1件。統合により1項目が複数の標準書を根拠に持ちうる。 */
 export interface ConsolidatedSource {
+  /** 出典の標準書。画面から該当箇所へ辿るために使う (文書名は一意ではない)。 */
+  document_id: number;
   check_id: string;
   standard_id: string;
   source_document: string;

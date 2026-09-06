@@ -11,6 +11,7 @@
  * 入力の保存方式 (即保存とフォーカス外し保存の使い分け) は `ChecklistTable` と同じ。
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { ResultBadge, SeverityBadge } from "@/components/Badges";
@@ -230,11 +231,18 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
                   {row.sources.map((source, index) => (
                     // check_id は出典間で一意にならない。標準書ごとに同じ採番
                     // (CHK-UI-001 等) を持つため、位置を含めて識別する
+                    // 出典から、その標準書のチェックリストの該当項目へ移動できる
+                    // ようにする。check クエリで検索欄を埋め、その行だけを出す
                     <div key={`${source.check_id}-${index}`} style={{ marginBottom: 3 }}>
-                      <span className="mono">{source.standard_id}</span>{" "}
+                      <Link
+                        href={`/documents/${source.document_id}?check=${source.check_id}`}
+                        title={`${source.source_document} の ${source.check_id} を開く`}
+                      >
+                        <span className="mono">{source.standard_id}</span>{" "}
+                        {source.source_document}
+                      </Link>
                       <span className="muted">
-                        {source.source_document} 章 {source.chapter} ／ 節 {source.section} ／
-                        ページ {source.page}
+                        {" "}章 {source.chapter} ／ 節 {source.section} ／ ページ {source.page}
                       </span>
                     </div>
                   ))}

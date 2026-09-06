@@ -317,6 +317,9 @@ class ReviewSetOut(BaseModel):
 
 class ConsolidatedSource(BaseModel):
     """統合チェック項目の出典1件。1項目が複数の標準書を根拠に持ちうる。"""
+
+    #: 出典の標準書 (画面から該当箇所へ辿るために使う)
+    document_id: int
     check_id: str
     standard_id: str
     source_document: str
