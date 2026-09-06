@@ -261,3 +261,20 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class IdSequence(Base):
+    """採番カウンタ。1行1系列。
+
+    標準書IDのように、削除しても番号を再利用してはいけない採番に使う。
+    レコードの最大値から採番すると、最新のレコードを消したときに番号が巻き戻り、
+    既に出力済みの成果物が指すIDを別のレコードが名乗ることになる。
+    ここに持てば削除の影響を受けない。
+    """
+
+    __tablename__ = "id_sequences"
+
+    #: 系列名。標準書IDなら pipeline.DOCUMENT_SEQUENCE。
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: 最後に払い出した番号。次に払い出すのは value + 1。
+    value: Mapped[int] = mapped_column(Integer, default=0)

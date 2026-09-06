@@ -23,7 +23,7 @@ from app.core.extractor import ExtractedRule, extract_rules
 from app.core.parsers import parse_document
 from app.core.severity import decide_severity
 from app.core.structure import assign_structure
-from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument
+from app.models import AnalysisRun, ChecklistItem, IdSequence, Rule, StandardDocument
 
 #: 短すぎる / 述語が無い等でチェック化できない場合の理由
 REASON_TOO_SHORT = "確認可能な粒度に変換できない (規定文が短く述部を特定できない)"
@@ -70,22 +70,14 @@ def suggest_document_type(filename: str, sample_text: str = "") -> str:
 #: 標準書IDの接頭辞。出力・トレーサビリティ表にそのまま現れる。
 DOCUMENT_ID_PREFIX = "DOC-"
 
+#: 標準書IDの採番系列名 (IdSequence.name)。
+DOCUMENT_SEQUENCE = "document_id"
 
-def next_document_id(db: Session) -> str:
-    """次の標準書ID。既存の document_id の採番の最大 + 1。
 
-    主キーではなく document_id そのものから決める。主キーを使うと採番が主キー列に
-    引きずられ、PostgreSQL では連番が再利用されないため「DOC-001 なのに主キーは 29」
-    のようなずれが生じていた。
+def _highest_document_number(db: Session) -> int:
+    """現存する document_id のうち最大の番号。1件も無ければ 0。
 
-    既知の制限が2つある。
-
-    1. 最新の標準書を削除すると、その番号が次の登録で再利用される。既に出力済みの
-       成果物が指すIDを別の標準書が名乗ることになるため、削除を挟む運用では
-       成果物側のIDを信用しないこと。解消するには削除後も減らないカウンタが要る。
-    2. 「最大 + 1」を読んでから書くため、同時に登録すると両者が同じ番号を採りうる。
-       衝突は document_id の一意制約が弾き、採り直しは api/documents.py の
-       _create_document が行うので、利用者にエラーは出ない。
+    カウンタをまだ持たない既存DBを引き継ぐときの初期値に使う。
     """
     highest = 0
     for value in db.scalars(select(StandardDocument.document_id)).all():
@@ -94,7 +86,33 @@ def next_document_id(db: Session) -> str:
         suffix = value[len(DOCUMENT_ID_PREFIX) :]
         if suffix.isdigit():
             highest = max(highest, int(suffix))
-    return f"{DOCUMENT_ID_PREFIX}{highest + 1:03d}"
+    return highest
+
+
+def next_document_id(db: Session) -> str:
+    """次の標準書ID。採番カウンタ (IdSequence) から払い出す。
+
+    現存レコードの最大値ではなくカウンタから採るのは、削除で番号が巻き戻らない
+    ようにするため。巻き戻ると、既に出力済みの成果物が指すIDを別の標準書が
+    名乗ることになり、トレーサビリティが崩れる。
+
+    カウンタが無いDB (この仕組みより前に作られたもの) では、現存する
+    document_id の最大から始める。その時点で全件削除されていた場合に限り、
+    過去に使った番号を一度だけ再利用しうる。
+
+    払い出しはカウンタの読み書きなので、同時に登録すると両者が同じ番号を採る
+    余地が残る。衝突は document_id の一意制約が弾き、採り直しは
+    api/documents.py の _create_document が行う。カウンタの更新も採番した
+    標準書と同じトランザクションに入るため、やり直せば整合する。
+    """
+    sequence = db.get(IdSequence, DOCUMENT_SEQUENCE)
+    if sequence is None:
+        sequence = IdSequence(name=DOCUMENT_SEQUENCE, value=_highest_document_number(db))
+        db.add(sequence)
+        db.flush()
+
+    sequence.value += 1
+    return f"{DOCUMENT_ID_PREFIX}{sequence.value:03d}"
 
 
 def _preserved_review_state(db: Session, document_pk: int) -> dict[str, dict[str, str]]:

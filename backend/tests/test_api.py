@@ -224,25 +224,59 @@ def test_coverage_report_includes_rule_type_table_and_findings(client: TestClien
     assert "曖昧" in md
 
 
-def test_document_id_numbering_follows_existing_document_ids(client: TestClient) -> None:
-    """採番は document_id の最大 + 1 で決まる。
+def test_document_ids_are_issued_in_order(client: TestClient) -> None:
+    """標準書IDは登録順に払い出される。"""
+    ids = [_upload(client)["document_id"] for _ in range(3)]
+    assert ids == ["DOC-001", "DOC-002", "DOC-003"]
 
-    途中の標準書を削除しても、最大が変わらない限り採番は進み続ける。
-    ただし「最新を削除するとその番号が再利用される」制限は残っている
-    (解消には削除後も減らないカウンタが必要)。ここではその現状を記録しておく。
+
+def test_document_id_is_not_reused_after_deletion(client: TestClient) -> None:
+    """削除しても採番は巻き戻らない。
+
+    巻き戻ると、既に出力済みの成果物が指すIDを別の標準書が名乗ることになり、
+    トレーサビリティが崩れる。最新を消しても、途中を消しても前進すること。
     """
     first = _upload(client)
     second = _upload(client)
     third = _upload(client)
-    assert [first["document_id"], second["document_id"], third["document_id"]] == [
-        "DOC-001",
-        "DOC-002",
-        "DOC-003",
-    ]
+    issued = {first["document_id"], second["document_id"], third["document_id"]}
 
-    # 途中を削除しても最大は DOC-003 のままなので、採番は前進する
-    assert client.delete(f"/api/documents/{second['id']}").status_code == 204
-    assert _upload(client)["document_id"] == "DOC-004"
+    # 最新を削除しても、その番号は二度と払い出さない
+    assert client.delete(f"/api/documents/{third['id']}").status_code == 204
+    fourth = _upload(client)
+    assert fourth["document_id"] == "DOC-004"
+    assert fourth["document_id"] not in issued
+
+    # 全件削除しても同じ
+    for doc_id in (first["id"], second["id"], fourth["id"]):
+        assert client.delete(f"/api/documents/{doc_id}").status_code == 204
+    assert _upload(client)["document_id"] == "DOC-005"
+
+
+def test_document_id_counter_starts_from_existing_documents(client: TestClient) -> None:
+    """カウンタを持たない既存DBを引き継いだ場合は、現存する最大から続ける。
+
+    この仕組みより前に作られたDBには id_sequences の行が無い。そのまま 1 から
+    払い出すと既存の標準書と衝突するため、最大値から再開する必要がある。
+    """
+    from app.models import IdSequence
+
+    _upload(client)
+    _upload(client)
+
+    # 移行前の状態を再現する (カウンタ行だけを消す)。
+    # セッションはフィクスチャが差し替えた get_db から借りる。
+    session = app.dependency_overrides[get_db]()
+    db = next(session)
+    try:
+        row = db.get(IdSequence, "document_id")
+        assert row is not None
+        db.delete(row)
+        db.commit()
+    finally:
+        session.close()
+
+    assert _upload(client)["document_id"] == "DOC-003"
 
 
 def test_upload_recovers_when_the_document_id_was_taken(
