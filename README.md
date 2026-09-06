@@ -56,6 +56,15 @@ Claude API は2か所で**任意に**使えます。どちらも既定は無効�
 
 ### いちばん簡単な方法
 
+Windows（**コマンドプロンプト**）:
+
+```bat
+start.cmd
+```
+
+`.\start.ps1` を cmd から直接叩くと、関連付けで別窓が開いてすぐプロンプトに戻ります。
+同じ画面で動かしたいときは `start.cmd` を使ってください。
+
 Windows（PowerShell）:
 
 ```powershell
@@ -79,9 +88,11 @@ macOS / Linux:
 
 停止するには、起動したウィンドウで `Ctrl+C` を押すか:
 
-```powershell
-.\stop.ps1
+```bat
+stop.cmd
 ```
+
+PowerShell なら `.\stop.ps1` でも同じです。
 
 ログは `logs/` に出力されます。起動に失敗したときはここを確認してください。
 

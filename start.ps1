@@ -27,6 +27,10 @@
 
 .EXAMPLE
   .\start.ps1 -FrontendPort 3400
+
+.NOTES
+  コマンドプロンプトからは start.cmd を使う。
+  cmd で .\start.ps1 を実行すると関連付けで別窓が開き、この画面には何も出ない。
 #>
 [CmdletBinding()]
 param(
