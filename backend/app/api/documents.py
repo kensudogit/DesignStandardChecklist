@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.auth import current_user
@@ -112,8 +113,8 @@ async def upload_document(
     if doc_type not in tx.DOC_TYPE_PREFIX:
         raise HTTPException(status_code=400, detail=f"未知の文書種別です: {doc_type}")
 
-    doc = StandardDocument(
-        document_id=next_document_id(db),
+    doc = _create_document(
+        db,
         document_name=(document_name or Path(filename).stem).strip(),
         document_type=doc_type,
         id_prefix=tx.DOC_TYPE_PREFIX[doc_type],
@@ -128,14 +129,43 @@ async def upload_document(
         file_format=ext.lstrip("."),
         status="uploaded",
     )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
 
     # 既定は登録と同時に解析する。analyze=False は取り込みだけしたいとき用
     if analyze:
         _run_analysis(db, doc)
     return _to_out(db, doc)
+
+
+#: 採番が衝突したときに番号を採り直す回数。実運用で数回を超えることはない。
+MAX_DOCUMENT_ID_ATTEMPTS = 5
+
+
+def _create_document(db: Session, **fields: object) -> StandardDocument:
+    """標準書を作る。採番が衝突したら番号を採り直す。
+
+    next_document_id は「既存の最大 + 1」を読んでから書くため、同時に2件
+    アップロードされると両方が同じ番号を採りうる。document_id には一意制約が
+    あるので、後から書いた側は IntegrityError になる。
+
+    衝突しても失う情報は無く、番号を採り直して入れ直せば済む。ここで捕まえて
+    やり直し、利用者にはエラーを見せない。
+    """
+    for _ in range(MAX_DOCUMENT_ID_ATTEMPTS):
+        doc = StandardDocument(document_id=next_document_id(db), **fields)
+        db.add(doc)
+        try:
+            db.commit()
+        except IntegrityError:
+            # StandardDocument の一意制約は document_id だけなので、衝突の原因は採番。
+            db.rollback()
+            continue
+        db.refresh(doc)
+        return doc
+
+    raise HTTPException(
+        status_code=503,
+        detail="標準書IDの採番が繰り返し衝突しました。時間をおいて再度登録してください。",
+    )
 
 
 def _run_analysis(db: Session, doc: StandardDocument) -> None:

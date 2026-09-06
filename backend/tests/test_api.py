@@ -222,3 +222,53 @@ def test_coverage_report_includes_rule_type_table_and_findings(client: TestClien
     assert "| Prohibited |" in md
     # Findings に地の文の指摘が入っている (曖昧表現の指摘など)
     assert "曖昧" in md
+
+
+def test_document_id_numbering_follows_existing_document_ids(client: TestClient) -> None:
+    """採番は document_id の最大 + 1 で決まる。
+
+    途中の標準書を削除しても、最大が変わらない限り採番は進み続ける。
+    ただし「最新を削除するとその番号が再利用される」制限は残っている
+    (解消には削除後も減らないカウンタが必要)。ここではその現状を記録しておく。
+    """
+    first = _upload(client)
+    second = _upload(client)
+    third = _upload(client)
+    assert [first["document_id"], second["document_id"], third["document_id"]] == [
+        "DOC-001",
+        "DOC-002",
+        "DOC-003",
+    ]
+
+    # 途中を削除しても最大は DOC-003 のままなので、採番は前進する
+    assert client.delete(f"/api/documents/{second['id']}").status_code == 204
+    assert _upload(client)["document_id"] == "DOC-004"
+
+
+def test_upload_recovers_when_the_document_id_was_taken(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """採番が既存と衝突しても、番号を採り直して登録できる。
+
+    同時にアップロードすると、両者が「既存の最大 + 1」を読んで同じ番号を採りうる。
+    先に書いた側が通り、後から書いた側は一意制約に弾かれる状況を再現する。
+    """
+    from app.api import documents as documents_api
+
+    first = _upload(client)
+
+    real = documents_api.next_document_id
+    calls: list[str] = []
+
+    def collide_once(db: object) -> str:
+        # 1回目だけ、既に使われている番号を返す
+        value = first["document_id"] if not calls else real(db)
+        calls.append(value)
+        return value
+
+    monkeypatch.setattr(documents_api, "next_document_id", collide_once)
+
+    second = _upload(client)
+    assert calls[0] == first["document_id"]  # 衝突させた
+    assert len(calls) >= 2  # 採り直した
+    assert second["document_id"] != first["document_id"]

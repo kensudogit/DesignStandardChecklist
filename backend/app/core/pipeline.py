@@ -67,9 +67,34 @@ def suggest_document_type(filename: str, sample_text: str = "") -> str:
     return "other"
 
 
+#: 標準書IDの接頭辞。出力・トレーサビリティ表にそのまま現れる。
+DOCUMENT_ID_PREFIX = "DOC-"
+
+
 def next_document_id(db: Session) -> str:
-    last = db.scalar(select(StandardDocument.id).order_by(StandardDocument.id.desc()).limit(1))
-    return f"DOC-{(last or 0) + 1:03d}"
+    """次の標準書ID。既存の document_id の採番の最大 + 1。
+
+    主キーではなく document_id そのものから決める。主キーを使うと採番が主キー列に
+    引きずられ、PostgreSQL では連番が再利用されないため「DOC-001 なのに主キーは 29」
+    のようなずれが生じていた。
+
+    既知の制限が2つある。
+
+    1. 最新の標準書を削除すると、その番号が次の登録で再利用される。既に出力済みの
+       成果物が指すIDを別の標準書が名乗ることになるため、削除を挟む運用では
+       成果物側のIDを信用しないこと。解消するには削除後も減らないカウンタが要る。
+    2. 「最大 + 1」を読んでから書くため、同時に登録すると両者が同じ番号を採りうる。
+       衝突は document_id の一意制約が弾き、採り直しは api/documents.py の
+       _create_document が行うので、利用者にエラーは出ない。
+    """
+    highest = 0
+    for value in db.scalars(select(StandardDocument.document_id)).all():
+        if not value or not value.startswith(DOCUMENT_ID_PREFIX):
+            continue
+        suffix = value[len(DOCUMENT_ID_PREFIX) :]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return f"{DOCUMENT_ID_PREFIX}{highest + 1:03d}"
 
 
 def _preserved_review_state(db: Session, document_pk: int) -> dict[str, dict[str, str]]:
