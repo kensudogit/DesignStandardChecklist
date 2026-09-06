@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.core import llm_classify
 from app.core import taxonomy as tx
 from app.core.structure import Located
 
@@ -275,7 +276,13 @@ def _starts_with_exception(sentence: str) -> bool:
     return sentence.lstrip().startswith(tx.EXCEPTION_CONNECTIVES)
 
 
-def extract_rules(located: list[Located]) -> list[ExtractedRule]:
+def extract_rules(located: list[Located], assist=None) -> list[ExtractedRule]:
+    """規定候補を抽出する。
+
+    assist を渡すと、ルールベースが規範表現を見つけられなかった表の行について
+    「規定か記述例か」を Claude に尋ねる (`llm_classify`)。既定は None で、
+    その場合は従来どおり完全にルールベースで動く。
+    """
     rules: list[ExtractedRule] = []
     for item in located:
         if item.is_heading:
@@ -294,6 +301,13 @@ def extract_rules(located: list[Located]) -> list[ExtractedRule]:
             rule_type, markers = classify_rule_type(
                 sentence, item.rule_type_hint, item.severity_hint
             )
+            if rule_type is None and assist is not None and item.is_table:
+                # 表の行だけを対象にする。本文はルールベースで足りており、
+                # 記載例の表まで投げると費用が増えるうえ誤判定の機会も増える
+                judged = assist.classify(_strip_tail(sentence))
+                if judged is not None:
+                    rule_type, evidence = judged
+                    markers = [f"{llm_classify.ASSIST_MARKER}:{evidence}"]
             if rule_type is None:
                 continue
             body = _strip_tail(sentence)

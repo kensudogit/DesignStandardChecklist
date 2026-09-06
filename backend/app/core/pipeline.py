@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core import taxonomy as tx
+from app.core import llm_classify
 from app.core import llm_split
 from app.core.atomizer import AtomicCheck, atomize, base_sentence
 from app.core.coverage import CoverageResult, compute_coverage
@@ -142,7 +143,11 @@ def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
     document.has_page_numbers = any(item.page is not None for item in located)
 
     # --- STEP 3-6: 規定候補抽出 / 分類 / 要求事項化 ---
-    extracted = extract_rules(located)
+    settings = get_settings()
+    classify = llm_classify.build_assist(
+        settings.llm_classify_enabled, settings.llm_classify_cache_path
+    )
+    extracted = extract_rules(located, classify)
 
     preserved = _preserved_review_state(db, document.id)
 

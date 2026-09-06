@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     #: 応答のキャッシュ。同じ標準書を再解析してもチェック項目がずれないようにする。
     llm_split_cache: str = "./storage/llm-split-cache.json"
 
+    #: STEP 5 補助: 規範表現を持たない行が規定か記述例かを Claude に判定させる。
+    #: 答えさせるのは可否・規範レベル・原文中の根拠だけで、文言は生成させない。
+    #: ANTHROPIC_API_KEY と anthropic SDK が無ければ、True でもルールベースのまま動く。
+    llm_classify_enabled: bool = False
+    #: 応答のキャッシュ。同じ標準書を再解析してもチェック項目がずれないようにする。
+    llm_classify_cache: str = "./storage/llm-classify-cache.json"
+
     cors_origins: str = "http://localhost:3000"
     #: 開発時は dev サーバのポートが変わることがあるため localhost 全ポートを許可する。
     #: 本番では空文字にして cors_origins だけで運用する。
@@ -48,6 +55,13 @@ class Settings(BaseSettings):
     @property
     def llm_split_cache_path(self) -> Path | None:
         p = Path(self.llm_split_cache)
+        if not p.is_absolute():
+            p = BASE_DIR / p
+        return p
+
+    @property
+    def llm_classify_cache_path(self) -> Path | None:
+        p = Path(self.llm_classify_cache)
         if not p.is_absolute():
             p = BASE_DIR / p
         return p
