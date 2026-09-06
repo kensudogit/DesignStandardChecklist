@@ -272,6 +272,14 @@ tbody tr.row-ng {
   border: 1px solid var(--border);
 }
 
+/*
+ * ダウンロードはリンクではなくボタン。認証ヘッダを付けるため fetch 経由で取得しており
+ * (frontend/lib/api.ts の download)、<a download> は使えない。見た目はバッジのまま。
+ */
+button.badge {
+  line-height: 1.6;
+}
+
 .tabs {
   display: flex;
   gap: 4px;

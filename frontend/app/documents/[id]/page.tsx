@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * 標準書1件の詳細ページ。解析結果をタブで切り替えて見せる。
+ *
+ * データはページ表示時に一括で取得し、以降はタブを切り替えても取り直さない
+ * (AI推奨事項だけは別リソースなので、そのタブの中で自前に取得する)。
+ * 通信を1回にまとめる代わりに、初回の表示までは少し待たされる。
+ */
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,6 +31,7 @@ import type {
   UnconvertedRow,
 } from "@/lib/types";
 
+/** タブの識別子。文字列そのままだと綴り違いに気付けないので型で縛る。 */
 type TabKey =
   | "checklist"
   | "rules"
@@ -31,6 +40,15 @@ type TabKey =
   | "unconverted"
   | "recommendations";
 
+/** ZIP 一括ダウンロードを表す擬似 artifact 名 (個別の成果物名と衝突しない)。 */
+const BUNDLE = "__bundle__";
+
+/**
+ * 個別にダウンロードできる成果物。
+ *
+ * `artifact` はサーバ側の出力名 (`backend/app/core/exporter.py`) とそのまま
+ * 対応する。ここを変えるだけでは増えないので、増やすときは両方直すこと。
+ */
 const ARTIFACTS: { artifact: string; label: string }[] = [
   { artifact: "design-review-checklist", label: "チェックリスト (CSV)" },
   { artifact: "checklist-markdown", label: "チェックリスト (MD)" },
@@ -56,12 +74,22 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // ダウンロード中の成果物。ZIP 一括は BUNDLE で表す。
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Next.js の params は Promise。id が決まるまで取得は始められない
   useEffect(() => {
     void params.then((p) => setDocumentId(Number(p.id)));
   }, [params]);
 
+  /**
+   * このページで使うデータを一括で取得する。
+   *
+   * タブごとに遅延読み込みしないのは、Coverage やトレーサビリティが
+   * チェックリストと同じ解析結果から作られており、別々に取ると
+   * 再解析を挟んだときに画面内で新旧が混ざるため。
+   */
   const load = useCallback(async (id: number) => {
     setLoading(true);
     try {
@@ -96,6 +124,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     if (documentId !== null) void load(documentId);
   }, [documentId, load]);
 
+  /**
+   * 再解析する。
+   *
+   * 記入済みのレビュー結果は Check ID を手がかりにサーバ側で引き継がれるが、
+   * 再解析後に同じ Check ID が出てこなかった項目の記入内容は失われる。
+   */
   async function handleReanalyze() {
     if (documentId === null) return;
     setBusy(true);
@@ -110,15 +144,37 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  async function handleDownload(artifact?: string) {
+    if (documentId === null) return;
+    setDownloading(artifact ?? BUNDLE);
+    setError(null);
+    try {
+      await api.downloadExport(documentId, artifact);
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : "ダウンロードに失敗しました");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  /**
+   * チェック項目1件の更新を画面へ反映する。
+   *
+   * 一覧全体は取り直さず、更新のあった1件だけ差し替える。入力のたびに
+   * 全件取得すると、他の欄の未保存入力が消えてしまうため。
+   * 進捗だけはサーバから取り直す (件数の集計は画面側では持っていない)。
+   */
   function handleItemChanged(updated: ChecklistItem) {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
     if (documentId !== null) {
+      // 進捗の取得失敗は記入操作を妨げないので、握りつぶして表示だけ据え置く
       void api.progress(documentId).then(setProgress).catch(() => undefined);
     }
   }
 
   if (loading) return <p className="muted">読み込み中…</p>;
 
+  // 文書そのものを取得できなかった場合だけ、全面をエラー表示に差し替える
   if (error && !doc) {
     return (
       <>
@@ -174,18 +230,22 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         )}
 
         <div className="row" style={{ marginTop: 14 }}>
-          <a className="badge badge-neutral" href={api.exportUrl(documentId)} download>
-            ⬇ 成果物一式 (ZIP)
-          </a>
+          <button
+            className="badge badge-neutral"
+            onClick={() => void handleDownload()}
+            disabled={downloading !== null}
+          >
+            {downloading === BUNDLE ? "取得中…" : "⬇ 成果物一式 (ZIP)"}
+          </button>
           {ARTIFACTS.map((a) => (
-            <a
+            <button
               key={a.artifact}
               className="badge badge-neutral"
-              href={api.exportUrl(documentId, a.artifact)}
-              download
+              onClick={() => void handleDownload(a.artifact)}
+              disabled={downloading !== null}
             >
-              ⬇ {a.label}
-            </a>
+              {downloading === a.artifact ? "取得中…" : `⬇ ${a.label}`}
+            </button>
           ))}
         </div>
         <p className="small muted" style={{ marginTop: 8, marginBottom: 0 }}>

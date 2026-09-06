@@ -5,12 +5,14 @@ from __future__ import annotations
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api.exports import _content_disposition
 from app.config import get_settings
 from app.core.security import TokenError, create_token, hash_password, read_token, verify_password
 from app.db import Base, get_db
@@ -245,3 +247,66 @@ def test_reviewer_is_filled_from_the_logged_in_user(auth_client: TestClient) -> 
         headers=headers,
     ).json()
     assert explicit["reviewer"] == "代理入力: 佐藤"
+
+
+def test_exports_require_the_bearer_token(auth_client: TestClient) -> None:
+    """成果物ダウンロードも他のAPIと同じく認証必須。
+
+    画面側は `<a href download>` ではなく fetch + Blob で取得している
+    (`frontend/lib/api.ts` の download)。ブラウザ発のナビゲーションには
+    Authorization ヘッダが付かず、この経路が 401 になるため。
+    """
+    token = _bootstrap(auth_client)
+    headers = _auth(token)
+
+    doc = auth_client.post(
+        "/api/documents",
+        files={"file": (SAMPLE.name, SAMPLE.read_bytes(), "text/markdown")},
+        data={"document_type": "screen", "document_name": "画面設計標準"},
+        headers=headers,
+    ).json()
+    review_set = auth_client.post(
+        "/api/review-sets",
+        json={"name": "横断レビュー表", "document_ids": [doc["id"]]},
+        headers=headers,
+    ).json()
+
+    paths = (
+        f"/api/documents/{doc['id']}/export",
+        f"/api/documents/{doc['id']}/export/design-review-checklist",
+        f"/api/documents/{doc['id']}/export/coverage-report",
+        f"/api/review-sets/{review_set['id']}/export",
+        f"/api/review-sets/{review_set['id']}/export/consolidated-checklist",
+    )
+
+    for path in paths:
+        # トークン無し（＝ブラウザ任せのダウンロード）は通らない
+        assert auth_client.get(path).status_code == 401, path
+        # 認証ヘッダ付きなら本文もファイル名も従来どおり
+        response = auth_client.get(path, headers=headers)
+        assert response.status_code == 200, f"{path}: {response.text}"
+        assert response.content
+        assert response.headers["Content-Disposition"].startswith(
+            "attachment; filename*=UTF-8''"
+        ), path
+
+    checklist = auth_client.get(
+        f"/api/documents/{doc['id']}/export/design-review-checklist", headers=headers
+    )
+    assert (
+        checklist.headers["Content-Disposition"]
+        == "attachment; filename*=UTF-8''design-review-checklist.csv"
+    )
+    assert checklist.content.decode("utf-8").startswith("﻿")  # Excel 用 BOM
+
+
+def test_content_disposition_encodes_japanese_filenames() -> None:
+    """日本語ファイル名は RFC 5987 形式。画面側はこれを decodeURIComponent で戻す。"""
+    header = _content_disposition("設計レビューチェックリスト.csv")
+    assert header == (
+        "attachment; filename*=UTF-8''"
+        "%E8%A8%AD%E8%A8%88%E3%83%AC%E3%83%93%E3%83%A5%E3%83%BC"
+        "%E3%83%81%E3%82%A7%E3%83%83%E3%82%AF%E3%83%AA%E3%82%B9%E3%83%88.csv"
+    )
+    encoded = header.split("filename*=UTF-8''", 1)[1]
+    assert unquote(encoded) == "設計レビューチェックリスト.csv"

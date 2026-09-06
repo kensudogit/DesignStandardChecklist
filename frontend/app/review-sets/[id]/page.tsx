@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * 統合レビュー表1件の詳細ページ。
+ *
+ * 構成は標準書の詳細ページとほぼ同じで、対象が複数標準書を横断した
+ * チェックリストになっている点だけが違う。
+ */
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -7,6 +14,10 @@ import { ConsolidatedTable } from "@/components/ConsolidatedTable";
 import { api, ApiError } from "@/lib/api";
 import type { ConsolidatedCheck, ReviewSet, ReviewSetCoverage } from "@/lib/types";
 
+/** ZIP 一括ダウンロードを表す擬似 artifact 名 (個別の成果物名と衝突しない)。 */
+const BUNDLE = "__bundle__";
+
+/** 個別にダウンロードできる成果物。`artifact` はサーバ側の出力名と対応する。 */
 const ARTIFACTS = [
   { artifact: "consolidated-checklist", label: "統合チェックリスト (CSV)" },
   { artifact: "consolidated-checklist-markdown", label: "統合チェックリスト (MD)" },
@@ -23,12 +34,16 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
   const [coverage, setCoverage] = useState<ReviewSetCoverage | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // ダウンロード中の成果物。ZIP 一括は BUNDLE で表す。
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Next.js の params は Promise。id が決まるまで取得は始められない
   useEffect(() => {
     void params.then((p) => setReviewSetId(Number(p.id)));
   }, [params]);
 
+  // レビュー表・統合チェックリスト・Coverage は同じ統合結果から作られるので一括で取る
   const load = useCallback(async (id: number) => {
     setLoading(true);
     try {
@@ -52,6 +67,12 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
     if (reviewSetId !== null) void load(reviewSetId);
   }, [reviewSetId, load]);
 
+  /**
+   * 統合をやり直す。
+   *
+   * 各標準書を再解析したあとは、統合結果が古いままなのでこれを実行する。
+   * 重複の統合先が変わりうるため、記入済みの結果の紐付きも変わる。
+   */
   async function rebuild() {
     if (reviewSetId === null) return;
     setBusy(true);
@@ -65,6 +86,20 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
     }
   }
 
+  async function handleDownload(artifact?: string) {
+    if (reviewSetId === null) return;
+    setDownloading(artifact ?? BUNDLE);
+    setError(null);
+    try {
+      await api.downloadReviewSetExport(reviewSetId, artifact);
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : "ダウンロードに失敗しました");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  // 更新のあった1行だけ差し替える。全件取り直すと他の欄の未保存入力が消える
   function handleChanged(updated: ConsolidatedCheck) {
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }
@@ -121,18 +156,22 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
         )}
 
         <div className="row" style={{ marginTop: 14 }}>
-          <a className="badge badge-neutral" href={api.reviewSetExportUrl(reviewSetId)} download>
-            ⬇ 成果物一式 (ZIP)
-          </a>
+          <button
+            className="badge badge-neutral"
+            onClick={() => void handleDownload()}
+            disabled={downloading !== null}
+          >
+            {downloading === BUNDLE ? "取得中…" : "⬇ 成果物一式 (ZIP)"}
+          </button>
           {ARTIFACTS.map((a) => (
-            <a
+            <button
               key={a.artifact}
               className="badge badge-neutral"
-              href={api.reviewSetExportUrl(reviewSetId, a.artifact)}
-              download
+              onClick={() => void handleDownload(a.artifact)}
+              disabled={downloading !== null}
             >
-              ⬇ {a.label}
-            </a>
+              {downloading === a.artifact ? "取得中…" : `⬇ ${a.label}`}
+            </button>
           ))}
         </div>
         <p className="small muted" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -199,6 +238,7 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
                       <td className="num">{row.coverage}%</td>
                       <td className="num">
                         <span
+                          /* 必須規定は 100% 未満なら無条件で赤。統合しても Coverage は標準書ごとに見る */
                           className={
                             row.mandatory_coverage >= 100 ? "badge badge-ok" : "badge badge-ng"
                           }
