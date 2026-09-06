@@ -7,4 +7,5 @@ psycopg[binary]==3.2.3
 # Claude API を使う場合のみ
 #   - AI推奨事項の生成（観点カタログ方式はこれ無しで動きます）
 #   - 並列表現の分解補助（DSC_LLM_SPLIT_ENABLED=true のときだけ。既定は無効）
+#   - 規定か記述例かの判定補助（DSC_LLM_CLASSIFY_ENABLED=true のときだけ。既定は無効）
 anthropic==1.4.0

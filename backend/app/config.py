@@ -1,6 +1,8 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +40,14 @@ class Settings(BaseSettings):
     llm_classify_enabled: bool = False
     #: 応答のキャッシュ。同じ標準書を再解析してもチェック項目がずれないようにする。
     llm_classify_cache: str = "./storage/llm-classify-cache.json"
+
+    #: Claude API の資格情報。DSC_ 接頭辞を付けない名前で受ける (SDK の慣習に合わせる)。
+    #:
+    #: 設定として持つのは、.env に書いた値を効かせるため。anthropic SDK も
+    #: claude_available() も os.environ しか見ないが、pydantic-settings が .env を
+    #: 読んでも os.environ には入らない。Docker では compose が環境変数として渡すため
+    #: 気付きにくいが、ローカル起動では .env に書いても補助が無効のままになっていた。
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
 
     cors_origins: str = "http://localhost:3000"
     #: 開発時は dev サーバのポートが変わることがあるため localhost 全ポートを許可する。
@@ -77,6 +87,14 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    s = Settings()
-    (BASE_DIR / "storage").mkdir(parents=True, exist_ok=True)
-    return s
+    """設定を1度だけ読む。
+
+    .env から読んだ Claude の資格情報は os.environ へ渡す。SDK も
+    llm_split / llm_classify の claude_available() も os.environ しか見ないため、
+    ここで橋渡ししないと .env に書いた値が効かない。
+    既に環境変数がある場合は、そちらを優先して上書きしない。
+    """
+    settings = Settings()
+    if settings.anthropic_api_key and not os.environ.get("ANTHROPIC_API_KEY"):
+        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+    return settings
