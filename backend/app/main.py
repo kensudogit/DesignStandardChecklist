@@ -15,6 +15,11 @@ from app.schemas import DocumentTypeOption, MetaOut
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """起動時の初期化。テーブル作成と、認証有効時の初期管理者の用意。
+
+    秘密鍵の未設定をここで落としているのは、起動してから 401 が出続けるより、
+    起動そのものを失敗させた方が原因に気付きやすいため。
+    """
     init_db()
     settings = get_settings()
     if settings.auth_enabled:
@@ -42,6 +47,9 @@ app = FastAPI(
 )
 
 settings = get_settings()
+# CORS: フロントエンドが別ポートで動くため必須。
+# expose_headers を指定しないと、ブラウザ側から Content-Disposition を読めず、
+# ダウンロード時のファイル名を復元できない。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

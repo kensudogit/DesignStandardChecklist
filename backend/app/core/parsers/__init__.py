@@ -7,10 +7,17 @@ from pathlib import Path
 from app.core.parsers import docx_parser, pdf_parser, text_parser, xlsx_parser
 from app.core.parsers.base import Block, ParsedDocument, ParseError
 
+#: 受け付ける拡張子。画面のファイル選択にもこの集合をそのまま渡す
+#: (/api/meta 経由)。増やすときは parse_document の分岐も併せて足すこと。
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xlsm", ".md", ".markdown", ".txt", ".csv"}
 
 
 def parse_document(filename: str, data: bytes) -> ParsedDocument:
+    """拡張子を見てパーサを選ぶ。
+
+    旧形式 (.doc / .xls) は「未対応」で終わらせず、変換を促す文言を返す。
+    利用者が次に何をすればよいか分かるようにするため。
+    """
     ext = Path(filename).suffix.lower()
     if ext == ".pdf":
         return pdf_parser.parse(data)

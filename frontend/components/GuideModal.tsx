@@ -1,7 +1,15 @@
 "use client";
 
+/**
+ * 「利用手順」モーダル。ヘッダーのボタンから開く。
+ *
+ * 手順の文章はこのファイル内の定数として持つ。別ファイルや API に置くほどの
+ * 量ではなく、画面の変更と説明の変更を同じ差分で追えるようにするため。
+ */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** 利用手順1ステップ分。`note` は補足で、無ければ出さない。 */
 interface Step {
   no: string;
   title: string;
@@ -9,6 +17,12 @@ interface Step {
   note?: string;
 }
 
+/**
+ * 基本的な使い方。登録から成果物出力までを一周する順に並べている。
+ *
+ * 本文は表示専用の定数。仕様を変えたらここも直す必要があるので、
+ * 挙動を書き換えたときは対応するステップの記述を確認すること。
+ */
 const BASIC_STEPS: Step[] = [
   {
     no: "01",
@@ -48,6 +62,7 @@ const BASIC_STEPS: Step[] = [
   },
 ];
 
+/** 一周したあとに使う機能。統合レビュー表・AI推奨事項・再解析。 */
 const ADVANCED_STEPS: Step[] = [
   {
     no: "07",
@@ -69,6 +84,7 @@ const ADVANCED_STEPS: Step[] = [
   },
 ];
 
+/** つまずきやすい点。原因と対処を対にして並べる。 */
 const TIPS: { title: string; body: string }[] = [
   {
     title: "ポートが使用中で起動できない",
@@ -88,6 +104,7 @@ const TIPS: { title: string; body: string }[] = [
   },
 ];
 
+/** 冒頭に出す構成技術。中身の説明ではなく、全体像を掴ませるための飾り。 */
 const TAGS = [
   "Next.js 16",
   "React 19",
@@ -100,11 +117,19 @@ const TAGS = [
   "Claude API",
 ];
 
+/**
+ * 利用手順のモーダル。
+ *
+ * 閉じる手段は3つ用意している (×ボタン / 背景クリック / Escape キー)。
+ * 内容が長いため、閉じ方が分からず行き詰まるのを避けるため。
+ */
 export function GuideModal({ onClose }: { onClose: () => void }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [atBottom, setAtBottom] = useState(false);
 
+  // 末尾まで読んだかどうか。24px の余裕を持たせているのは、
+    // 端数や慣性スクロールでぴったり一致しないことがあるため
   const handleScroll = useCallback(() => {
     const element = bodyRef.current;
     if (!element) return;
@@ -112,7 +137,10 @@ export function GuideModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    // 開いた直後のキーボード操作がモーダル内から始まるようにする
     closeRef.current?.focus();
+    // 背景のスクロールを止める。元の値を控えておき、閉じるときに戻す
+        // (決め打ちで "" に戻すと、他が設定していた値を壊す)
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -126,6 +154,7 @@ export function GuideModal({ onClose }: { onClose: () => void }) {
     };
   }, [onClose]);
 
+  // 背景クリックで閉じる。パネル側で伝播を止めているので中身の操作では閉じない
   return (
     <div className="guide-overlay" onClick={onClose} role="presentation">
       <div
@@ -133,6 +162,7 @@ export function GuideModal({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="guide-title"
+        /* パネル内のクリックが背景まで届くと、操作するたびに閉じてしまう */
         onClick={(event) => event.stopPropagation()}
       >
         <header className="guide-header">
@@ -147,6 +177,7 @@ export function GuideModal({ onClose }: { onClose: () => void }) {
             <p className="guide-eyebrow">DESIGN STANDARD GUIDE</p>
           </div>
           <span className="guide-spacer" />
+          {/* 末尾まで読んだら消す。読み終えた後も出続けると急かして見える */}
           {!atBottom && <span className="guide-scroll-hint">スクロールして確認</span>}
           <button
             ref={closeRef}
@@ -245,6 +276,7 @@ export function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** ステップ1件の見た目。番号は装飾なので読み上げ対象から外す。 */
 function StepCard({ step }: { step: Step }) {
   return (
     <section className="guide-step">

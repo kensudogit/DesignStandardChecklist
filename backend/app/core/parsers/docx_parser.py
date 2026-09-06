@@ -7,10 +7,16 @@ import re
 
 from app.core.parsers.base import Block, ParsedDocument, ParseError
 
+#: 見出しスタイル名。日本語版 Word は「見出し 1」、英語版は "Heading 1" になる。
 HEADING_STYLE = re.compile(r"(?:Heading|見出し)\s*(\d+)")
 
 
 def parse(data: bytes) -> ParsedDocument:
+    """Word から段落と表を Block にする。
+
+    ページ番号は python-docx では取得できない (改ページは印刷時に決まるため)。
+    推測はせず None のままにし、出力時に「不明」と表示する。
+    """
     try:
         import docx
     except ImportError as exc:  # pragma: no cover
@@ -31,10 +37,12 @@ def parse(data: bytes) -> ParsedDocument:
         m = HEADING_STYLE.search(style_name)
         if m:
             level = int(m.group(1))
+        # 表題は章より上位だが、階層としては最上位と同じ扱いで足りる
         elif style_name in ("Title", "表題"):
             level = 1
         blocks.append(Block(text=text, heading_level=level))
 
+    # 表は行単位で1ブロックにする。セルを連結するのは行内だけで、行はまたがない
     for t_index, table in enumerate(document.tables, start=1):
         for row in table.rows:
             cells = [c.text.strip() for c in row.cells]

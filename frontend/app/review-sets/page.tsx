@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * 統合レビュー表の一覧と作成フォーム。
+ *
+ * 作成対象に選べるのは解析済みの標準書だけ。未解析のものはチェック項目を
+ * 持たないため、統合しても表に何も出てこない。
+ */
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -17,6 +24,7 @@ export default function ReviewSetsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // レビュー表一覧と、作成の選択肢になる標準書一覧をまとめて取る
   const load = useCallback(async () => {
     try {
       const [setList, docList] = await Promise.all([
@@ -24,6 +32,7 @@ export default function ReviewSetsPage() {
         api.listDocuments(),
       ]);
       setSets(setList);
+      // 未解析・解析失敗の標準書は統合しても中身が無いので選択肢から外す
       setDocuments(docList.filter((d) => d.status === "analyzed"));
       setError(null);
     } catch (e: unknown) {
@@ -37,12 +46,18 @@ export default function ReviewSetsPage() {
     void load();
   }, [load]);
 
+  // 対象標準書の選択トグル。順序は選んだ順のまま保つ
   function toggle(id: number) {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
 
+  /**
+   * 統合レビュー表を作って、その詳細ページへ移動する。
+   *
+   * 作成 API 側で統合処理まで走るため、標準書の数が多いと待ち時間が出る。
+   */
   async function create(event: React.FormEvent) {
     event.preventDefault();
     if (selected.length === 0) {
@@ -52,6 +67,7 @@ export default function ReviewSetsPage() {
     setBusy(true);
     setError(null);
     try {
+      // 名前が空ならそのまま送らず既定名を入れる。一覧で見分けが付かなくなるため
       const created = await api.createReviewSet({
         name: name.trim() || "統合レビュー表",
         document_ids: selected,
@@ -64,6 +80,7 @@ export default function ReviewSetsPage() {
     }
   }
 
+  // レビュー表だけを消す。元の標準書と、その個別チェックリストは残る
   async function remove(reviewSet: ReviewSet) {
     if (!confirm(`「${reviewSet.name}」を削除します。`)) return;
     try {

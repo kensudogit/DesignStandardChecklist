@@ -27,10 +27,17 @@ def _resolve_url(raw: str) -> str:
 
 
 def build_engine(raw_url: str) -> Engine:
+    """接続先に応じた Engine を作る。
+
+    SQLite と PostgreSQL では必要な設定がまったく違うため、ここで分岐させて
+    呼び出し側には差を見せない。
+    """
     url = make_url(_resolve_url(raw_url))
 
     if url.get_backend_name() == "sqlite":
+        # SQLite の既定はスレッドをまたぐ接続を拒む。FastAPI は別スレッドで動くため外す
         kwargs: dict = {"connect_args": {"check_same_thread": False}}
+        # インメモリDBは接続ごとに別物になる。テストで同じDBを見るため接続を1本に固定する
         if url.database in (None, "", ":memory:"):
             kwargs["poolclass"] = StaticPool
         engine = create_engine(url, **kwargs)
@@ -60,10 +67,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 class Base(DeclarativeBase):
+    """SQLAlchemy モデルの基底クラス。"""
     pass
 
 
 def get_db() -> Generator[Session, None, None]:
+    """リクエストごとのセッション。FastAPI の依存として使い、終了時に必ず閉じる。"""
     db = SessionLocal()
     try:
         yield db
@@ -72,6 +81,10 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
+    """テーブルを作る。マイグレーションは持たず、起動時に無いものだけ作る。
+
+    models の import は、Base に全モデルを登録させるためだけに必要。
+    """
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

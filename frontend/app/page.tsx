@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * トップページ。標準書の登録フォームと、登録済み標準書の一覧を出す。
+ *
+ * 一覧はサーバ側では描画せず、マウント後に取得する。localStorage のトークンが
+ * ブラウザにしか無いため、サーバ側描画では認証付きの取得ができない。
+ */
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -12,6 +19,11 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /**
+   * 標準書一覧を取り込む。アップロード後や削除後にも呼ぶので `useCallback` で固定する。
+   *
+   * 失敗しても `loading` は必ず落とす。落とさないと「読み込み中…」のまま止まる。
+   */
   const load = useCallback(async () => {
     try {
       setDocuments(await api.listDocuments());
@@ -27,6 +39,12 @@ export default function HomePage() {
     void load();
   }, [load]);
 
+  /**
+   * 標準書を削除する。
+   *
+   * 解析結果と記入済みのレビュー結果も一緒に消える (サーバ側は cascade 削除)。
+   * 取り消せないので確認を挟む。
+   */
   async function handleDelete(doc: StandardDocument) {
     if (!confirm(`「${doc.document_name}」と、その解析結果・レビュー記入を削除します。`)) return;
     try {
@@ -72,12 +90,14 @@ export default function HomePage() {
                   </div>
                 </Link>
                 <div className="row" style={{ marginTop: 10 }}>
+                  {/* 解析に失敗した標準書も一覧には残す。原因を error_message で示すため */}
                   {doc.status === "failed" ? (
                     <span className="badge badge-ng">解析失敗</span>
                   ) : (
                     <span className="badge badge-ok">解析済み</span>
                   )}
                   <span className="badge badge-neutral">{doc.file_format}</span>
+                  {/* Markdown / テキストにはページの概念が無く、出典にページ番号を書けない */}
                   {!doc.has_page_numbers && (
                     <span className="badge badge-neutral" title="この形式ではページ番号を取得できません">
                       ページ番号なし

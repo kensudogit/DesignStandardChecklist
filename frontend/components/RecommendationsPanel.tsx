@@ -1,13 +1,26 @@
 "use client";
 
+/**
+ * AI推奨事項のタブ。
+ *
+ * ここで扱うのは「標準書に規定が無い観点」の提案であり、標準書由来の成果物とは
+ * 完全に別のリソース。チェックリスト・トレーサビリティ・Coverage には混ざらない。
+ * 画面上でも警告帯と「AI推奨」タグで由来が分かるようにしている。
+ *
+ * コメント欄は入力中 `drafts` に溜め、フォーカスが外れた時点で保存する
+ * (`ChecklistTable` と同じ方式)。採否のプルダウンは選択時に即保存する。
+ */
+
 import { useCallback, useEffect, useState } from "react";
 
 import { SeverityBadge } from "@/components/Badges";
 import { api, ApiError } from "@/lib/api";
 import type { AdoptionValue, Recommendation, RecommendationStatus } from "@/lib/types";
 
+/** 採否の選択肢。既定は `Proposed` (未判断)。 */
 const ADOPTIONS: AdoptionValue[] = ["Proposed", "Adopted", "Rejected"];
 
+/** 採否 → CSS クラス。Rejected は N/A と同じ色にして、対応不要であることを示す。 */
 const ADOPTION_CLASS: Record<AdoptionValue, string> = {
   Proposed: "badge badge-pending",
   Adopted: "badge badge-ok",
@@ -20,8 +33,10 @@ export function RecommendationsPanel({ documentId }: { documentId: number }) {
   const [generator, setGenerator] = useState("catalog");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** コメント欄の未保存入力。キーは推奨事項の id。 */
   const [drafts, setDrafts] = useState<Record<number, string>>({});
 
+  // 一覧と生成可否は常に組で使うので同時に取りに行く
   const load = useCallback(async () => {
     try {
       const [list, statusData] = await Promise.all([
@@ -40,6 +55,12 @@ export function RecommendationsPanel({ documentId }: { documentId: number }) {
     void load();
   }, [load]);
 
+  /**
+   * 推奨事項を生成する。
+   *
+   * サーバ側は `replace: true` で呼ぶため、既存の推奨事項は入れ替わる。
+   * 採否やコメントの記入内容も一緒に消える。
+   */
   async function generate() {
     setBusy(true);
     setError(null);
@@ -53,6 +74,7 @@ export function RecommendationsPanel({ documentId }: { documentId: number }) {
     }
   }
 
+  // 取り消せないので確認を挟む
   async function clear() {
     if (!confirm("生成済みのAI推奨事項をすべて削除します。")) return;
     setBusy(true);
@@ -83,10 +105,12 @@ export function RecommendationsPanel({ documentId }: { documentId: number }) {
     }
   }
 
+  // APIキー未設定なら Claude を選べないようにする。選ばせてから失敗させない
   const claudeDisabled = !status?.claude_available;
 
   return (
     <>
+      {/* 由来を取り違えると成果物の意味が変わるので、常に先頭で明示する */}
       <div className="alert alert-warn">
         <strong>AI推奨事項は標準書由来ではありません。</strong>{" "}
         標準書に規定が無い観点として提案したものです。出典（章・節・ページ）は持たず、

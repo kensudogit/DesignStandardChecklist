@@ -15,8 +15,11 @@ from app.core import taxonomy as tx
 from app.core.coverage import CoverageResult
 from app.models import AnalysisRun, ChecklistItem, Rule, StandardDocument
 
+#: 出典等を取得できなかったときに入れる語。空欄との区別を付けるため文字列で持つ。
 UNKNOWN = "不明"
 
+#: 以降の *_COLUMNS は skill/templates/*.csv の列と順序をそのまま写したもの。
+#: テンプレートと列がずれると既存のレビュー運用が壊れるため、並べ替え・改名はしない。
 CHECKLIST_COLUMNS = [
     "No",
     "Check ID",
@@ -89,6 +92,11 @@ UNCONVERTED_COLUMNS = [
 
 
 def _csv(columns: list[str], rows: list[list[str]]) -> str:
+    """CSV 文字列を組み立てる。
+
+    先頭に付けている U+FEFF は UTF-8 BOM。付けないと Excel が Shift_JIS と
+    誤認して日本語が文字化けする。改行を CRLF にしているのも Excel に合わせるため。
+    """
     buf = io.StringIO(newline="")
     writer = csv.writer(buf, lineterminator="\r\n")
     writer.writerow(columns)
@@ -97,16 +105,23 @@ def _csv(columns: list[str], rows: list[list[str]]) -> str:
 
 
 def _blank(value: object) -> str:
+    """空なら「不明」に置き換える。
+
+    出典や版数など、取得できなかったことを明示したい項目に使う。空欄のままだと
+    「取得できなかった」のか「そもそも記載が無い」のかを読み手が判別できない。
+    """
     if value is None or value == "":
         return UNKNOWN
     return str(value)
 
 
 def _plain(value: object) -> str:
+    """空を空のまま通す。備考など、無いことが自然な項目に使う。"""
     return "" if value is None else str(value)
 
 
 def standard_register_csv(documents: list[StandardDocument]) -> str:
+    """STEP 1 の成果物: 標準書一覧。登録済みの標準書をそのまま並べる。"""
     rows = [
         [
             d.document_id,
@@ -125,6 +140,10 @@ def standard_register_csv(documents: list[StandardDocument]) -> str:
 
 
 def extracted_rules_csv(document: StandardDocument, rules: list[Rule]) -> str:
+    """STEP 3-6 の成果物: 規定抽出一覧。チェックリストの手前にある中間成果物。
+
+    原文と正規化後の要求事項を並べて出すので、変換が妥当かをここで確認できる。
+    """
     rows = [
         [
             r.standard_id,
@@ -147,6 +166,11 @@ def extracted_rules_csv(document: StandardDocument, rules: list[Rule]) -> str:
 
 
 def checklist_csv(document: StandardDocument, items: list[tuple[ChecklistItem, Rule]]) -> str:
+    """STEP 14 の主成果物: レビューチェックリスト。
+
+    レビュー記入欄 (Result/Evidence/Reviewer/Review Date/Comment) は、画面で
+    記入済みならその値を、未記入なら空のまま出す。Excel 上で続きを記入できる。
+    """
     rows = []
     for item, rule in items:
         standard_ids = ";".join([rule.standard_id, *item.extra_standard_ids])
@@ -177,6 +201,11 @@ def checklist_csv(document: StandardDocument, items: list[tuple[ChecklistItem, R
 
 
 def traceability_csv(document: StandardDocument, items: list[tuple[ChecklistItem, Rule]]) -> str:
+    """STEP 12 の成果物: トレーサビリティマトリクス。
+
+    Check ID から出典までを1行で追えるようにする。出典が欠けている行は
+    Trace Status で分かるようにし、ページ番号を推測して埋めることはしない。
+    """
     rows = []
     for item, rule in items:
         has_source = bool(rule.chapter or rule.section or rule.page is not None or rule.locator)
@@ -206,6 +235,11 @@ def traceability_csv(document: StandardDocument, items: list[tuple[ChecklistItem
 
 
 def unconverted_rules_csv(rules: list[Rule]) -> str:
+    """STEP 13 の成果物: 未変換規定一覧。
+
+    チェック項目にできなかった規定を理由付きで残す。Coverage が 100% でない
+    ときの内訳がここに出る。
+    """
     rows = []
     for r in rules:
         if not r.unconverted_reason:
@@ -220,6 +254,7 @@ def unconverted_rules_csv(rules: list[Rule]) -> str:
 
 
 def checklist_markdown(document: StandardDocument, items: list[tuple[ChecklistItem, Rule]]) -> str:
+    """チェックリストの Markdown 版。CSV と同じ内容を、そのまま読める形で出す。"""
     header = (
         "| No | Check ID | Category | Sub Category | Check Point | Severity | Standard ID | "
         "Source Document | Chapter | Section | Page | Condition | Exception | Result | Evidence | "
@@ -362,11 +397,15 @@ AI_RECOMMENDATION_COLUMNS = [
     "Comment",
 ]
 
+#: AI推奨事項の出力に必ず入れる由来表記。標準書由来と取り違えられないようにする。
 AI_ORIGIN = "AI推奨（標準書由来ではない）"
 
 
 def ai_recommendations_csv(document: StandardDocument, rows: list) -> str:
-    """rows は Recommendation モデルのリスト。
+    """AI推奨事項の CSV。標準由来の成果物とは別ファイルにする。
+
+    rows は Recommendation モデルのリスト。同じ ZIP に入れても取り違えられないよう、
+    全行に由来表記を入れている。
 
     Standard ID / Chapter / Section / Page の列を意図的に持たない。
     標準書に無い提案に出典を書けば、それは出典の捏造になる (禁止事項)。
@@ -461,7 +500,10 @@ CROSS_TRACEABILITY_COLUMNS = [
 
 
 def consolidated_checklist_csv(rows: list[dict]) -> str:
-    """rows は ConsolidatedCheckOut を dict 化したもの。"""
+    """統合レビュー表の CSV。1行が複数の標準書を出典に持ちうる。
+
+    rows は ConsolidatedCheckOut を dict 化したもの。
+    """
     body = []
     for row in rows:
         sources = row["sources"]
@@ -493,7 +535,11 @@ def consolidated_checklist_csv(rows: list[dict]) -> str:
 
 
 def cross_traceability_csv(rows: list[dict]) -> str:
-    """統合チェック1行につき、出典となった標準書ごとに1行を出す。"""
+    """統合レビュー表のトレーサビリティ。
+
+    統合チェック1行につき、出典となった標準書ごとに1行を出す。どの標準書の
+    どの規定から来たかを全て並べるため、行数はチェック件数より多くなる。
+    """
     body = []
     for row in rows:
         for index, source in enumerate(row["sources"]):

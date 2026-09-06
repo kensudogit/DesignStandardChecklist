@@ -27,6 +27,7 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/documents/{document_id}/recommendations", tags=["recommendations"], dependencies=[Depends(current_user)])
 
+#: 由来の説明。画面の警告帯に出して、標準由来と取り違えないようにする。
 SEPARATION_NOTE = (
     "AI推奨事項は標準書由来ではありません。チェックリスト・トレーサビリティ・"
     "Coverage には含まれず、出典（章・節・ページ）も持ちません。"
@@ -34,6 +35,7 @@ SEPARATION_NOTE = (
 
 
 def _rows(db: Session, document_pk: int) -> list[Recommendation]:
+    """その標準書の AI推奨事項を採番順で返す。"""
     return list(
         db.scalars(
             select(Recommendation)
@@ -47,6 +49,7 @@ def _rows(db: Session, document_pk: int) -> list[Recommendation]:
 def list_recommendations(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> list[Recommendation]:
+    """生成済みの AI推奨事項の一覧。未生成なら空。"""
     return _rows(db, doc.id)
 
 
@@ -54,6 +57,11 @@ def list_recommendations(
 def status(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> RecommendationStatus:
+    """生成可否の問い合わせ。
+
+    画面はこの結果で生成方式のプルダウンを組み立てる。APIキーが無いときに
+    Claude を選ばせて失敗させないため、選択肢の側で先に落としている。
+    """
     claude_ok = recommender.claude_available()
     return RecommendationStatus(
         count=len(_rows(db, doc.id)),
@@ -70,6 +78,13 @@ def generate_recommendations(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> list[Recommendation]:
+    """AI推奨事項を生成する。
+
+    解析前の標準書に対しては 409 で断る。標準書がどこまで規定しているかを
+    知らないまま提案しても、既に規定済みの観点を重ねて出すだけになるため。
+
+    replace=True なら総入れ替え、False なら既存に無いものだけ追記する。
+    """
     rules = _rules(db, doc.id)
     if not rules:
         raise HTTPException(
@@ -88,6 +103,7 @@ def generate_recommendations(
     except RecommendationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # 総入れ替え。採否やコメントの記入内容も一緒に消える
     if payload.replace:
         for old in _rows(db, doc.id):
             db.delete(old)
@@ -97,6 +113,7 @@ def generate_recommendations(
         existing = _rows(db, doc.id)
         start = max((r.no for r in existing), default=0)
         known = {r.check_point for r in existing}
+        # 追記時は同じ内容の提案を重ねない。生成方式を変えると重複しやすい
         generated = [g for g in generated if g.check_point not in known]
 
     prefix = doc.id_prefix
@@ -129,6 +146,7 @@ def update_recommendation(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> Recommendation:
+    """採否とコメントを記録する。推奨内容そのものは書き換えない。"""
     row = db.get(Recommendation, recommendation_pk)
     if row is None or row.document_pk != doc.id:
         raise HTTPException(status_code=404, detail="AI推奨事項が見つかりません")
@@ -143,6 +161,7 @@ def update_recommendation(
 def clear_recommendations(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> Response:
+    """生成済みの AI推奨事項をすべて消す。標準由来の成果物には影響しない。"""
     for row in _rows(db, doc.id):
         db.delete(row)
     db.commit()

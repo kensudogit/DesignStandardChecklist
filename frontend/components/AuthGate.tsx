@@ -1,22 +1,38 @@
 "use client";
 
+/**
+ * 認証まわり。認証は既定で無効で、その場合この層は素通しになる。
+ *
+ * 有効・無効の判定はサーバ (`DSC_AUTH_ENABLED`) が持ち、画面側は
+ * `/api/auth/status` の応答に従うだけにしている。画面側で分岐条件を持つと、
+ * サーバは要求しているのに画面は素通し、という食い違いが起きるため。
+ */
+
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { api, ApiError, auth } from "@/lib/api";
 import type { AuthStatus, AuthUser } from "@/lib/types";
 
+/** 画面のどこからでもログイン状態を参照できるようにするための入れ物。 */
 interface AuthContextValue {
   enabled: boolean;
   user: AuthUser | null;
   logout: () => void;
 }
 
+/**
+ * 既定値は「認証無効」。
+ *
+ * Provider の外で `useAuth()` が呼ばれても落ちないようにするためのもので、
+ * 実際の値は `AuthGate` が流し込む。
+ */
 const AuthContext = createContext<AuthContextValue>({
   enabled: false,
   user: null,
   logout: () => undefined,
 });
 
+/** ログイン状態の参照。`AuthBadge` など、ヘッダ側の部品から使う。 */
 export function useAuth() {
   return useContext(AuthContext);
 }
@@ -29,6 +45,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 認証状態はログイン・ログアウトのたびに取り直す
   const load = useCallback(async () => {
     try {
       setStatus(await api.authStatus());
@@ -55,6 +72,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // 取得前に子要素を描画すると、未認証のまま一瞬中身が見えてしまう
   if (status === null) {
     return <p className="muted">読み込み中…</p>;
   }
@@ -67,6 +85,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // 認証は有効だが未ログイン。子要素は描画せずログイン画面に差し替える
   if (status.user === null) {
     return <LoginScreen needsBootstrap={status.needs_bootstrap} onDone={load} />;
   }
@@ -78,6 +97,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * ログイン画面。利用者が1人も居ないときは初期管理者の作成画面を兼ねる。
+ *
+ * 作成とログインを分けず連続で実行するのは、作成直後に手で入力し直させないため。
+ */
 function LoginScreen({
   needsBootstrap,
   onDone,
@@ -96,6 +120,7 @@ function LoginScreen({
     setBusy(true);
     setError(null);
     try {
+      // 初回のみ作成してからログインする。2回目以降は作成 API が管理者権限を要求する
       if (needsBootstrap) {
         await api.createUser({
           username: username.trim(),
@@ -105,6 +130,7 @@ function LoginScreen({
       }
       const result = await api.login(username.trim(), password);
       auth.set(result.token);
+      // 成功後はパスワードを状態に残さない
       setPassword("");
       onDone();
     } catch (e: unknown) {

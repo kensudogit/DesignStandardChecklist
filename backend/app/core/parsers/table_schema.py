@@ -43,6 +43,7 @@ SEVERITY_VALUES: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 #: ヘッダ行と判定するのに必要な、役割を特定できた列の数
+#: 少なすぎると本文の行を誤ってヘッダと判定する。
 MIN_HEADER_MATCHES = 3
 
 #: ヘッダを探す範囲 (先頭の改訂履歴などを読み飛ばすため)
@@ -53,6 +54,7 @@ SECTION_VALUE = re.compile(r"^(\d+(?:[.\-]\d+)*)$")
 
 
 def _normalize(text: str) -> str:
+    """比較用に表記を揃える。全角・半角と大文字・小文字の違いを吸収する。"""
     return unicodedata.normalize("NFKC", text).strip().lower()
 
 
@@ -83,6 +85,7 @@ def detect_schema(rows: list[list[str]]) -> tuple[int, TableSchema] | None:
         used: set[str] = set()
         for column_index, cell in enumerate(row):
             value = _normalize(cell)
+            # 長いセルは見出しではなく本文。ヘッダ行の判定から外す
             if not value or len(value) > 12:
                 continue
             for role, keywords in HEADER_KEYWORDS:
@@ -99,6 +102,11 @@ def detect_schema(rows: list[list[str]]) -> tuple[int, TableSchema] | None:
 
 
 def map_rule_type(value: str) -> str | None:
+    """区分列の値を規範レベルへ写す (STEP 5)。判定できなければ None。
+
+    「条件付き必須」を先に見るのは、「必須」が部分一致で先に当たってしまい、
+    条件の存在が消えるのを防ぐため。RULE_TYPE_VALUES の並び順に意味がある。
+    """
     normalized = _normalize(value)
     if not normalized:
         return None
@@ -109,6 +117,11 @@ def map_rule_type(value: str) -> str | None:
 
 
 def map_severity(value: str) -> str | None:
+    """重要度列の値を Severity へ写す (STEP 10)。判定できなければ None。
+
+    大文字小文字を潰さないのは、A/B/C/D や S といった1文字の記号を
+    区別する必要があるため。
+    """
     normalized = unicodedata.normalize("NFKC", value).strip()
     if not normalized:
         return None
@@ -119,12 +132,14 @@ def map_severity(value: str) -> str | None:
 
 
 def map_chapter(value: str) -> str | None:
+    """章番号の列を読む。「第3章」からは 3 を取り出し、それ以外は記載のまま返す。"""
     normalized = unicodedata.normalize("NFKC", value).strip()
     m = CHAPTER_VALUE.match(normalized)
     return m.group(1) if m else (normalized or None)
 
 
 def map_section(value: str) -> str | None:
+    """節番号の列を読む。「3.2.1」形式ならそのまま、それ以外は記載のまま返す。"""
     normalized = unicodedata.normalize("NFKC", value).strip()
     m = SECTION_VALUE.match(normalized)
     return m.group(1) if m else (normalized or None)

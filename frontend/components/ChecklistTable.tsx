@@ -1,11 +1,23 @@
 "use client";
 
+/**
+ * チェックリスト本体の表。絞り込みと、レビュー結果の記入を担当する。
+ *
+ * 記入方法は列によって2種類ある。
+ *  - 結果 (OK/NG/N/A) のプルダウン: 選んだ時点で即保存する
+ *  - Evidence / Reviewer / 日付 / コメントの自由入力: 入力中は `drafts` に溜め、
+ *    フォーカスが外れた時点でまとめて保存する
+ *
+ * 自由入力を1文字ごとに保存しないのは、打鍵のたびに PATCH が飛ぶのを避けるため。
+ */
+
 import { useEffect, useMemo, useState } from "react";
 
 import { ResultBadge, SeverityBadge } from "@/components/Badges";
 import { api, ApiError } from "@/lib/api";
 import type { ChecklistItem, Meta, ResultValue } from "@/lib/types";
 
+/** 表示順。重要度の高いものから並べる。`Severity` の宣言順とは独立に持つ。 */
 const SEVERITY_ORDER = ["Critical", "High", "Medium", "Low"];
 
 interface Props {
@@ -29,17 +41,31 @@ export function ChecklistTable({
   const [query, setQuery] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 未保存の入力内容。キーはチェック項目の id。
+   *
+   * 保存に成功した項目はここから消し、以後はサーバから来た値を表示する。
+   */
   const [drafts, setDrafts] = useState<Record<number, Partial<ChecklistItem>>>({});
 
+  // 一覧が入れ替わったら未保存の入力は捨てる。古い draft を残すと、
+      // 別の解析結果に対して前の入力値を表示してしまう
   useEffect(() => {
     setDrafts({});
   }, [items]);
 
+  // 分類の選択肢は取得済みの項目から作る。文書ごとに出現する分類が違うため
   const categories = useMemo(
     () => Array.from(new Set(items.map((i) => i.category))).sort(),
     [items],
   );
 
+  /**
+   * 絞り込みと並べ替えを適用した表示対象。
+   *
+   * 絞り込みはサーバにも同じ条件を渡せるが、件数が多くないため画面側で完結させ、
+   * 操作のたびに通信しないようにしている。
+   */
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return items
@@ -61,6 +87,11 @@ export function ChecklistTable({
       );
   }, [items, severity, category, result, query]);
 
+  /**
+   * 1項目のレビュー結果を保存する。
+   *
+   * 成功したら親へ通知し、その項目の draft を破棄する (サーバの値が正になる)。
+   */
   async function save(item: ChecklistItem, payload: Partial<ChecklistItem>) {
     setSavingId(item.id);
     setError(null);
@@ -85,6 +116,12 @@ export function ChecklistTable({
     }
   }
 
+  /**
+   * 入力欄に出す値。未編集ならサーバの値を出す。
+   *
+   * 末尾の `?? ""` は、null のフィールドで input が非制御コンポーネントに
+   * 切り替わってしまうのを防ぐためのもの。
+   */
   function draftValue(item: ChecklistItem, field: keyof ChecklistItem): string {
     const draft = drafts[item.id]?.[field];
     return (draft ?? item[field] ?? "") as string;
@@ -94,6 +131,7 @@ export function ChecklistTable({
     setDrafts((d) => ({ ...d, [item.id]: { ...d[item.id], [field]: value } }));
   }
 
+  // 値が変わっていなければ保存しない。フォーカスを通過しただけで PATCH が飛ぶのを防ぐ
   function commit(item: ChecklistItem, field: keyof ChecklistItem) {
     const draft = drafts[item.id]?.[field];
     if (draft === undefined || draft === item[field]) return;
@@ -235,6 +273,7 @@ export function ChecklistTable({
                   <select
                     value={item.result}
                     disabled={savingId === item.id}
+                    /* 結果だけは draft を挟まず即保存する。選択操作は確定操作とみなせるため */
                     onChange={(e) => void save(item, { result: e.target.value as ResultValue })}
                     style={{ minWidth: 92 }}
                   >

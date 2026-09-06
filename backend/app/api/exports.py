@@ -20,6 +20,7 @@ from app.models import Recommendation, StandardDocument
 
 router = APIRouter(prefix="/api/documents/{document_id}/export", tags=["export"], dependencies=[Depends(current_user)])
 
+#: ZIP に常に含める成果物。すべて標準書由来。
 ARTIFACTS = (
     "standard-register",
     "extracted-rules",
@@ -35,6 +36,7 @@ OPTIONAL_ARTIFACTS = ("ai-recommendations", "ai-recommendations-markdown")
 
 
 def _recommendations(db: Session, document_pk: int) -> list[Recommendation]:
+    """その標準書の AI推奨事項を採番順で返す。ZIP に同梱するかの判定にも使う。"""
     return list(
         db.scalars(
             select(Recommendation)
@@ -45,6 +47,14 @@ def _recommendations(db: Session, document_pk: int) -> list[Recommendation]:
 
 
 def _content_disposition(filename: str) -> str:
+    """ダウンロード時のファイル名ヘッダ。
+
+    RFC 5987 の filename*=UTF-8'' 形式のみを使う。素の filename= に日本語を
+    そのまま置くと、ブラウザによって文字化けや欠落が起きる。
+
+    なお、このヘッダをブラウザの JavaScript から読むには CORS の
+    expose_headers に Content-Disposition を入れる必要がある (main.py)。
+    """
     return f"attachment; filename*=UTF-8''{quote(filename)}"
 
 
@@ -111,6 +121,7 @@ def download_artifact(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> Response:
+    """成果物を1つダウンロードする。"""
     filename, media_type, body = build_artifact(db, doc, artifact)
     return Response(
         content=body.encode("utf-8"),
@@ -123,6 +134,11 @@ def download_artifact(
 def download_all(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> StreamingResponse:
+    """成果物をまとめて ZIP で返す。
+
+    AI推奨事項は生成済みのときだけ同梱する。標準由来の成果物とは別ファイルに
+    分かれているので、ZIP を開いた時点で由来を取り違えることはない。
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for artifact in ARTIFACTS:

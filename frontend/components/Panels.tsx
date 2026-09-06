@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * 標準書ページのタブごとの中身をまとめたもの。
+ *
+ * ここにある表はいずれも読み取り専用で、レビュー結果の記入は
+ * `ChecklistTable` 側が受け持つ。表示に徹しているため状態はほぼ持たない。
+ */
+
 import { useMemo, useState } from "react";
 
 import { RuleTypeBadge } from "@/components/Badges";
@@ -11,12 +18,18 @@ import type {
   UnconvertedRow,
 } from "@/lib/types";
 
+/**
+ * 抽出した規定の一覧 (STEP 3-6)。チェックリストの手前の中間成果物にあたる。
+ *
+ * チェック項目がどの原文から来たのかを確かめる用途で使う。
+ */
 export function RulesTable({ rules }: { rules: Rule[] }) {
   const [ruleType, setRuleType] = useState("");
   const types = useMemo(
     () => Array.from(new Set(rules.map((r) => r.rule_type))).sort(),
     [rules],
   );
+  // 件数が多くないので useMemo は使わない。絞り込みは描画のたびに計算する
   const visible = rules.filter((r) => !ruleType || r.rule_type === ruleType);
 
   return (
@@ -78,6 +91,8 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
                   )}
                 </td>
                 <td className="mono small">
+                  {/* 未変換の規定にはチェックIDが無い。空欄だと「表示漏れ」と区別が
+                                        付かないので、未変換であることを明示する */}
                   {rule.unconverted_reason ? (
                     <span className="badge badge-ng">未変換</span>
                   ) : (
@@ -93,6 +108,12 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
   );
 }
 
+/**
+ * トレーサビリティ表 (STEP 12)。チェック項目 → 出典の追跡可否を一覧にする。
+ *
+ * 追跡できない項目があること自体は異常ではない。ページ番号を持てない文書形式
+ * (Markdown 等) では出典が「不明」になるため。
+ */
 export function TraceabilityTable({ rows }: { rows: TraceabilityRow[] }) {
   const untraced = rows.filter((r) => r.trace_status !== "Traced").length;
   return (
@@ -147,6 +168,12 @@ export function TraceabilityTable({ rows }: { rows: TraceabilityRow[] }) {
   );
 }
 
+/**
+ * 未変換規定の一覧 (STEP 13)。
+ *
+ * 曖昧な規定を無理にチェック項目化しない方針のため、ここが空でないのが通常。
+ * 0件のときだけ表ではなく説明を出す。
+ */
 export function UnconvertedTable({ rows }: { rows: UnconvertedRow[] }) {
   if (rows.length === 0) {
     return (
@@ -187,6 +214,12 @@ export function UnconvertedTable({ rows }: { rows: UnconvertedRow[] }) {
   );
 }
 
+/**
+ * 数値1つを見せるタイル。`percent` を渡すとバーも出す。
+ *
+ * バーの色は 100% で緑、80% 未満で赤。必須・禁止規定は 100% が目標なので、
+ * 達していないことがひと目で分かるようにしている。
+ */
 function Stat({
   label,
   value,
@@ -207,6 +240,7 @@ function Stat({
       {sub && <div className="sub">{sub}</div>}
       {percent !== undefined && (
         <div className={`meter${percent >= 100 ? " good" : percent < 80 ? " bad" : ""}`}>
+          {/* 丸め誤差で 100 をわずかに超えてもバーがはみ出さないよう挟み込む */}
           <span style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
         </div>
       )}
@@ -214,6 +248,12 @@ function Stat({
   );
 }
 
+/**
+ * Coverage とレビュー進捗のまとめ (STEP 13)。
+ *
+ * 全体の Coverage とは別に必須・禁止規定を独立したタイルにしているのは、
+ * 全体が高くても必須が欠けていればレビューが成立しないため。
+ */
 export function CoveragePanel({
   coverage,
   progress,
@@ -221,6 +261,7 @@ export function CoveragePanel({
   coverage: Coverage;
   progress: ReviewProgress | null;
 }) {
+  // 必須・禁止は 100% 未満なら無条件で赤。「おおむね達成」を許さない
   const mandatoryTone = coverage.mandatory_coverage >= 100 ? "good" : "bad";
   const prohibitedTone = coverage.prohibited_coverage >= 100 ? "good" : "bad";
 
@@ -323,6 +364,7 @@ export function CoveragePanel({
               value={String(progress.pending)}
               tone={progress.pending ? "warn" : "good"}
               sub={`全 ${progress.total} 件`}
+              /* 0件のときは 0 とする。除算をそのまま書くと NaN がバーの幅に入る */
               percent={
                 progress.total ? ((progress.total - progress.pending) / progress.total) * 100 : 0
               }

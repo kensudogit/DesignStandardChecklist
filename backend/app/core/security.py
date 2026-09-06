@@ -14,6 +14,7 @@ import secrets
 import time
 
 #: scrypt のパラメータ。RFC 7914 の interactive 相当。
+#: 総当たりを遅くするための計算コスト。上げるほど安全だがログインも遅くなる。
 SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
@@ -22,6 +23,7 @@ KEY_BYTES = 32
 
 
 class TokenError(RuntimeError):
+    """トークンが不正、または期限切れ。"""
     pass
 
 
@@ -44,6 +46,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded: str) -> bool:
+    """パスワードを照合する。
+
+    保存されている値からパラメータを読み直して計算するため、後から scrypt の
+    強度を上げても既存の利用者はログインできる。
+
+    比較に compare_digest を使うのは、先頭から何文字一致したかが処理時間に
+    現れないようにするため。形式が壊れている場合は例外にせず False を返す。
+    """
     try:
         scheme, n, r, p, salt_b64, key_b64 = encoded.split("$")
         if scheme != "scrypt":
@@ -95,13 +105,20 @@ def read_token(*, secret: str, token: str) -> dict:
 
 
 def _sign(secret: str, body: str) -> str:
+    """本文の HMAC-SHA256 署名。秘密鍵を知らなければトークンを偽造できない。"""
     return _b64(hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest())
 
 
 def _b64(raw: bytes) -> str:
+    """URL 安全な base64。末尾の = は落とす。
+
+    トークンは payload.signature の形で「.」区切りにするため、
+    区切り文字と衝突しない文字種に収める必要がある。
+    """
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
 def _unb64(value: str) -> bytes:
+    """_b64 の逆。落とした = を長さから復元してから復号する。"""
     padding = "=" * (-len(value) % 4)
     return base64.urlsafe_b64decode(value + padding)

@@ -13,15 +13,18 @@ def decide_severity(
     explicit_severity: str | None = None,
 ) -> tuple[str, str]:
     """(severity, 判定根拠) を返す。"""
+    # 標準書に書いてあるものが最優先。推定は書かれていないときの代替手段にすぎない
     if explicit_severity:
         return explicit_severity, "標準書に重要度の明示あり"
 
+    # 分類名にも観点語が現れる (例: 分類「セキュリティ」)。本文と併せて見る
     haystack = f"{category} {text}"
 
     hit = next((k for k in tx.CRITICAL_KEYWORDS if k in haystack), None)
     if hit:
         return "Critical", f"Critical観点キーワード「{hit}」に該当"
 
+    # 禁止規定は違反時の影響が大きいので、キーワードが無くても High 以上に置く
     if rule_type == "Prohibited":
         return "High", "禁止規定"
 
@@ -40,4 +43,5 @@ def decide_severity(
     if rule_type == "Optional":
         return "Low", "任意規定"
 
+    # 規範レベルを判定できなかった規定。落とさず中位に置いて人の目に触れさせる
     return "Medium", "参考規定"

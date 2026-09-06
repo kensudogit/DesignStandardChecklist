@@ -1,12 +1,30 @@
 "use client";
 
+/**
+ * 統合レビュー表。複数の標準書を横断した1枚のチェックリスト。
+ *
+ * `ChecklistTable` との違いは2つ。
+ *  - 出典が配列 (`sources`)。同じ内容の規定が複数の標準書にある場合、1行にまとめる
+ *  - ここで記入した結果は、統合元となった各標準書のチェック項目へ書き戻される
+ *    (書き戻しはサーバ側の処理。`backend/app/api/review_sets.py`)
+ *
+ * 入力の保存方式 (即保存とフォーカス外し保存の使い分け) は `ChecklistTable` と同じ。
+ */
+
 import { useEffect, useMemo, useState } from "react";
 
 import { ResultBadge, SeverityBadge } from "@/components/Badges";
 import { api, ApiError } from "@/lib/api";
 import type { ConsolidatedCheck, ResultValue } from "@/lib/types";
 
+/** 表示順。重要度の高いものから並べる。 */
 const SEVERITY_ORDER = ["Critical", "High", "Medium", "Low"];
+/**
+ * 結果の選択肢。
+ *
+ * `ChecklistTable` は meta から取るが、こちらは固定にしている。統合表は
+ * 複数文書にまたがるため、特定文書の meta に引きずられないようにするため。
+ */
 const RESULTS: ResultValue[] = ["OK", "NG", "N/A", "Pending"];
 
 interface Props {
@@ -21,12 +39,15 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
   const [onlyMerged, setOnlyMerged] = useState(false);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** 未保存の入力内容。キーは統合チェック項目の id。 */
   const [drafts, setDrafts] = useState<Record<number, Partial<ConsolidatedCheck>>>({});
 
+  // 一覧が入れ替わったら未保存の入力は捨てる (古い draft の混入を防ぐ)
   useEffect(() => {
     setDrafts({});
   }, [rows]);
 
+  // 出典の標準書名を重複なく集める。1行が複数出典を持つため flatMap で潰す
   const documentNames = useMemo(
     () =>
       Array.from(
@@ -35,6 +56,12 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
     [rows],
   );
 
+  /**
+   * 絞り込みと並べ替えを適用した表示対象。
+   *
+   * 出典と検索は「どれか1つでも一致すれば表示」とする (`some`)。統合された行は
+   * 複数の標準書に属するので、片方の標準書で絞り込んでも消えては困るため。
+   */
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return rows
@@ -78,10 +105,12 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
     }
   }
 
+  // 未編集ならサーバの値。末尾の `?? ""` は input が非制御に切り替わるのを防ぐため
   function draftValue(row: ConsolidatedCheck, field: keyof ConsolidatedCheck): string {
     return (drafts[row.id]?.[field] ?? row[field] ?? "") as string;
   }
 
+  // 値が変わっていなければ保存しない
   function commit(row: ConsolidatedCheck, field: keyof ConsolidatedCheck) {
     const draft = drafts[row.id]?.[field];
     if (draft === undefined || draft === row[field]) return;
@@ -92,6 +121,7 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
 
+      {/* 書き戻しの挙動は画面から見えないので、記入前に明示しておく */}
       <div className="alert alert-info">
         統合表で記入した結果は、統合元となったすべての標準書のチェック項目へ書き戻します。
         同じ内容のチェックが標準書ごとに違う判定になるのを防ぐためです。
@@ -176,6 +206,7 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
                 <td className="num">{row.no}</td>
                 <td className="mono">
                   {row.check_id}
+                  {/* +1 は統合先である自分自身の分。merged_check_ids には統合元だけが入る */}
                   {row.merged_check_ids.length > 0 && (
                     <div className="badge badge-medium" style={{ marginTop: 4 }}>
                       統合 {row.merged_check_ids.length + 1} 件

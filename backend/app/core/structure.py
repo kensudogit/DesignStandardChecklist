@@ -43,6 +43,12 @@ class Located:
 
 
 def _is_headingish(block: Block) -> bool:
+    """見出しになりうる行かを判定する。
+
+    Word のように書式から見出しと分かる場合はそれに従う。書式を持たない
+    テキストや PDF では、長さと句点の有無で見当を付けるしかない。
+    ここで通しても、後段で章・節の表記に一致しなければ見出しとは扱わない。
+    """
     if block.heading_level is not None:
         return True
     if block.is_table:
@@ -52,6 +58,14 @@ def _is_headingish(block: Block) -> bool:
 
 
 def assign_structure(blocks: list[Block]) -> list[Located]:
+    """ブロック列を走査し、各行に章・節を割り当てる (STEP 2)。
+
+    章・節は直前に現れた見出しを引き継ぐ。文書は上から順に読まれる前提で、
+    章見出しが出たら節はいったん未設定に戻す。
+
+    表形式の標準書は行自身が章・節の列を持つので、そちらを優先する。
+    見出しの追跡は推測を含むが、列の値は標準書の記載そのものであるため。
+    """
     chapter: str | None = None
     chapter_title: str | None = None
     section: str | None = None
@@ -63,6 +77,7 @@ def assign_structure(blocks: list[Block]) -> list[Located]:
         if not text:
             continue
 
+        # 見出しと判定できた行は規定候補から外す。見出し自体は規定ではない
         matched_heading = False
         if _is_headingish(block) and not BULLET.match(text):
             m = CHAPTER_JP.match(text)
@@ -73,6 +88,7 @@ def assign_structure(blocks: list[Block]) -> list[Located]:
             else:
                 m = NUMBERED.match(text)
                 if m:
+                    # 「3.2」形式の節番号からは、先頭の数字を章番号として取り出せる
                     section, section_title = m.group(1), m.group(2).strip()
                     chapter = section.split(".")[0]
                     matched_heading = True

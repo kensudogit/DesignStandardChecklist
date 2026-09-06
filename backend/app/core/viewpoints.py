@@ -14,6 +14,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Viewpoint:
+    """観点1件。
+
+    frozen にしているのは、カタログを読み取り専用の定義として扱うため。
+    実行中に書き換わると、同じ標準書から違う提案が出ることになる。
+    """
     key: str
     category: str
     sub_category: str
@@ -124,4 +129,8 @@ GENERIC_VIEWPOINTS: tuple[Viewpoint, ...] = (
 
 
 def viewpoints_for(document_type: str) -> tuple[Viewpoint, ...]:
+    """文書種別に対応する観点を返す。定義が無い種別には汎用の観点を当てる。
+
+    空を返さないのは、種別が想定外でも「何も提案できない」で終わらせないため。
+    """
     return VIEWPOINTS.get(document_type, GENERIC_VIEWPOINTS)

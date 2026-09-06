@@ -42,6 +42,7 @@ def apply_reviewer(data: dict, item, user: User | None) -> dict:
 
 
 def _rules(db: Session, document_pk: int) -> list[Rule]:
+    """その標準書の規定を、抽出順 (id 順) で全件返す。"""
     return list(
         db.scalars(
             select(Rule).where(Rule.document_pk == document_pk).order_by(Rule.id)
@@ -50,6 +51,10 @@ def _rules(db: Session, document_pk: int) -> list[Rule]:
 
 
 def _items(db: Session, document_pk: int) -> list[tuple[ChecklistItem, Rule]]:
+    """チェック項目を、由来する規定と組にして返す。
+
+    出典 (章・節・ページ) は規定側にしか無いため、常に join して取り出す。
+    """
     rows = db.execute(
         select(ChecklistItem, Rule)
         .join(Rule, ChecklistItem.rule_pk == Rule.id)
@@ -60,6 +65,10 @@ def _items(db: Session, document_pk: int) -> list[tuple[ChecklistItem, Rule]]:
 
 
 def _item_out(item: ChecklistItem, rule: Rule, document: StandardDocument) -> ChecklistItemOut:
+    """チェック項目と規定を1つの応答へまとめる (STEP 12: トレーサビリティ)。
+
+    出典は規定側の値をそのまま写す。ここで補完や推測はしない。
+    """
     out = ChecklistItemOut.model_validate(item)
     out.standard_id = rule.standard_id
     out.source_document = document.document_name
@@ -77,6 +86,7 @@ def list_rules(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> list[RuleOut]:
+    """規定抽出一覧 (STEP 3-6)。規範レベルで絞り込める。"""
     rules = _rules(db, doc.id)
     if rule_type:
         rules = [r for r in rules if r.rule_type == rule_type]
@@ -97,6 +107,11 @@ def list_checklist(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> list[ChecklistItemOut]:
+    """レビューチェックリスト (STEP 7-12)。
+
+    絞り込みは DB ではなく Python 側で行う。1標準書あたりの件数が多くなく、
+    全文検索が規定の原文にもまたがるため、まとめて取ってから絞る方が単純になる。
+    """
     rows = _items(db, doc.id)
     if severity:
         rows = [(i, r) for i, r in rows if i.severity == severity]
@@ -125,6 +140,10 @@ def update_checklist_item(
     db: Session = Depends(get_db),
     user: User | None = Depends(current_user),
 ) -> ChecklistItemOut:
+    """レビュー結果を1件更新する。
+
+    未指定の項目は変更しない (exclude_none)。画面側が1欄ずつ保存してくるため。
+    """
     item = db.get(ChecklistItem, item_id)
     if item is None or item.document_pk != doc.id:
         raise HTTPException(status_code=404, detail="チェック項目が見つかりません")
@@ -142,6 +161,7 @@ def update_checklist_item(
 def review_progress(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> ReviewProgress:
+    """レビューの進捗集計。重要度別の件数は未判定も含めた総数。"""
     rows = _items(db, doc.id)
     by_severity = {s: 0 for s in tx.SEVERITIES}
     for item, _ in rows:
@@ -157,6 +177,10 @@ def review_progress(
 
 
 def _coverage_result(db: Session, doc: StandardDocument) -> tuple[CoverageResult, AnalysisRun | None]:
+    """Coverage を算出する。重複候補の件数だけは解析時のスナップショットを使う。
+
+    重複判定は解析パイプラインの中でしか行わないため、ここでは数え直せない。
+    """
     rules = _rules(db, doc.id)
     run = db.scalars(
         select(AnalysisRun)
@@ -173,6 +197,7 @@ def _coverage_result(db: Session, doc: StandardDocument) -> tuple[CoverageResult
 def coverage(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> CoverageOut:
+    """Coverage レポート (STEP 13)。"""
     result, run = _coverage_result(db, doc)
     return CoverageOut(
         total_rules=result.total_rules,
@@ -209,6 +234,11 @@ def coverage(
 def traceability(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> list[TraceabilityRow]:
+    """トレーサビリティ表 (STEP 12)。
+
+    出典が1つも取れない規定は Trace Status を Source Unknown にする。
+    ページ番号を推測して埋めることはしない (必須原則)。
+    """
     out: list[TraceabilityRow] = []
     for item, rule in _items(db, doc.id):
         has_source = bool(rule.chapter or rule.section or rule.page is not None or rule.locator)
@@ -241,6 +271,11 @@ def traceability(
 def unconverted(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> list[UnconvertedRow]:
+    """未変換規定一覧 (STEP 13)。
+
+    必要な対応は、曖昧さが原因かどうかで文面を変える。曖昧な規定は標準書側の
+    判断が要るので、再解析しても解決しない。
+    """
     return [
         UnconvertedRow(
             standard_id=r.standard_id,

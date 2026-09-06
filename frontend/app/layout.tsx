@@ -1,3 +1,10 @@
+/**
+ * 全ページ共通のレイアウト。ヘッダとナビゲーションを置く。
+ *
+ * 本文を `AuthGate` で包んでいるため、認証が有効なときは未ログイン状態で
+ * 各ページの中身が描画されることはない。認証が無効なら素通しになる。
+ */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -5,6 +12,7 @@ import { AuthBadge, AuthGate } from "@/components/AuthGate";
 import { GuideButton } from "@/components/GuideModal";
 import "./globals.css";
 
+/** ブラウザのタブと検索結果に出る情報。 */
 export const metadata: Metadata = {
   title: "設計標準チェックリスト生成",
   description:

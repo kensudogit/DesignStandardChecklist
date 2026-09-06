@@ -25,6 +25,11 @@ MAX_ROWS_PER_SHEET = 20000
 
 
 def parse(data: bytes) -> ParsedDocument:
+    """Excel を Block にする。
+
+    ヘッダを判定できた表は列ごとに意味を持たせて取り出し、判定できなければ
+    行全体を1ブロックとして扱う。後者に落ちても規定文は失われない。
+    """
     try:
         from openpyxl import load_workbook
     except ImportError as exc:  # pragma: no cover
@@ -63,6 +68,11 @@ def parse(data: bytes) -> ParsedDocument:
 
 
 def _structured_blocks(sheet: str, rows: list[list[str]], detected) -> list[Block]:
+    """ヘッダを判定できた表から、規定内容の列だけを本文として取り出す。
+
+    章・節・区分・重要度は標準書がその列に書いている値なので、推測ではなく
+    記載そのものとして hint に載せて後段へ渡す。
+    """
     header_index, schema = detected
     rule_column = schema.rule_column
     assert rule_column is not None  # detect_schema が保証する

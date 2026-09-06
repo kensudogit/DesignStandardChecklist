@@ -11,10 +11,17 @@ import unicodedata
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
+#: 類似と見なす下限。これを超えても自動統合はせず「候補」として報告するだけ。
+#: 下げすぎると無関係な規定が候補に並び、確認の手間がかえって増える。
 SIMILAR_THRESHOLD = 0.88
 
 
 def normalize_for_compare(text: str) -> str:
+    """比較用に表記を揃える。
+
+    全角/半角、空白、句読点や括弧の違いだけで別物と判定されるのを防ぐ。
+    ここで落とすのは表記の揺れだけで、語そのものは変えない。
+    """
     s = unicodedata.normalize("NFKC", text)
     s = re.sub(r"[\s　]+", "", s)
     s = re.sub(r"[。、,.・「」『』()（）\"']", "", s)
@@ -53,6 +60,7 @@ def find_duplicates(check_points: list[str]) -> tuple[list[DuplicateGroup], set[
     for a_pos, a in enumerate(reps):
         for b in reps[a_pos + 1 :]:
             na, nb = norms[a], norms[b]
+            # 長さが大きく違う組は類似になりえない。重い比較の前に落とす
             if abs(len(na) - len(nb)) > max(len(na), len(nb)) * 0.4:
                 continue
             ratio = SequenceMatcher(None, na, nb).ratio()

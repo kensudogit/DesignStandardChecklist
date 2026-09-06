@@ -21,11 +21,17 @@ from app.schemas import DocumentMetaUpdate, DocumentOut
 
 router = APIRouter(prefix="/api/documents", tags=["documents"], dependencies=[Depends(current_user)])
 
+#: アップロード上限。解析が同期実行のため、応答が返らなくなる大きさを避ける狙いもある。
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 UNKNOWN = "不明"
 
 
 def _to_out(db: Session, doc: StandardDocument) -> DocumentOut:
+    """DB のモデルを API 応答へ変換する。
+
+    規定数・チェック数・Coverage は別テーブルにあるので、ここで数えて詰め直す。
+    Coverage は最新の解析実行 (AnalysisRun) の値を使う。未解析なら None。
+    """
     rule_count = db.scalar(
         select(func.count()).select_from(Rule).where(Rule.document_pk == doc.id)
     ) or 0
@@ -47,6 +53,10 @@ def _to_out(db: Session, doc: StandardDocument) -> DocumentOut:
 
 
 def get_document(document_id: int, db: Session = Depends(get_db)) -> StandardDocument:
+    """パス中の document_id から標準書を引く FastAPI の依存関数。
+
+    見つからなければ 404。各エンドポイントで存在チェックを書かずに済ませるため。
+    """
     doc = db.get(StandardDocument, document_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="標準書が見つかりません")
@@ -55,6 +65,7 @@ def get_document(document_id: int, db: Session = Depends(get_db)) -> StandardDoc
 
 @router.get("", response_model=list[DocumentOut])
 def list_documents(db: Session = Depends(get_db)) -> list[DocumentOut]:
+    """標準書一覧。新しく登録したものを先頭に出す。"""
     docs = db.scalars(select(StandardDocument).order_by(StandardDocument.id.desc())).all()
     return [_to_out(db, d) for d in docs]
 
@@ -73,6 +84,11 @@ async def upload_document(
     analyze: bool = Form(True),
     db: Session = Depends(get_db),
 ) -> DocumentOut:
+    """標準書をアップロードし、既定ではそのまま解析まで走らせる。
+
+    解析は同期実行なので、大きな標準書ではこの応答が遅くなる。バックグラウンド化
+    しないのは、失敗した理由をその場で返したいため。
+    """
     filename = file.filename or "unnamed"
     ext = Path(filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -116,12 +132,18 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
 
+    # 既定は登録と同時に解析する。analyze=False は取り込みだけしたいとき用
     if analyze:
         _run_analysis(db, doc)
     return _to_out(db, doc)
 
 
 def _run_analysis(db: Session, doc: StandardDocument) -> None:
+    """解析を実行し、失敗したら標準書を failed 状態にして残す。
+
+    レコードごと消さないのは、何が原因で失敗したかを画面で確認できるようにするため。
+    ParseError は利用者側で直せる問題 (422)、それ以外は想定外 (500) として分ける。
+    """
     try:
         analyze_document(db, doc)
     except ParseError as exc:
@@ -142,6 +164,7 @@ def _run_analysis(db: Session, doc: StandardDocument) -> None:
 def read_document(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> DocumentOut:
+    """標準書1件の詳細。"""
     return _to_out(db, doc)
 
 
@@ -151,6 +174,11 @@ def update_document_meta(
     doc: StandardDocument = Depends(get_document),
     db: Session = Depends(get_db),
 ) -> DocumentOut:
+    """版数・制定日などのメタ情報を後から直す。
+
+    文書種別を変えると ID プレフィックスも連動して変わる。既に採番済みの
+    規定ID・チェックIDは再解析するまで古いプレフィックスのまま残る。
+    """
     data = payload.model_dump(exclude_none=True)
     if "document_type" in data:
         if data["document_type"] not in tx.DOC_TYPE_PREFIX:
@@ -177,8 +205,14 @@ def reanalyze(
 def delete_document(
     doc: StandardDocument = Depends(get_document), db: Session = Depends(get_db)
 ) -> Response:
+    """標準書を削除する。規定・チェック項目・レビュー記入も cascade で消える。
+
+    アップロードした原本ファイルは DB のコミット後に消す。順序を逆にすると、
+    DB 側が失敗したときにファイルだけ失われる。
+    """
     stored = Path(doc.stored_path)
     db.delete(doc)
     db.commit()
+    # コミット後に消す。逆順だと DB 側が失敗したときに原本だけ失われる
     stored.unlink(missing_ok=True)
     return Response(status_code=204)

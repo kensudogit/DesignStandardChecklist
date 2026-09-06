@@ -13,6 +13,7 @@ from app.core import taxonomy as tx
 
 @dataclass
 class CoverageResult:
+    """Coverage の算出結果。findings は画面と Markdown 出力の両方で使う。"""
     total_rules: int = 0
     target_rules: int = 0
     converted_rules: int = 0
@@ -39,6 +40,11 @@ class CoverageResult:
 
 
 def _pct(num: int, den: int) -> float:
+    """百分率。分母が 0 なら 100% とする。
+
+    「対象となる規定が1件も無い」のは未達ではないため。0% にすると、
+    禁止規定を含まない標準書が常に警告を出してしまう。
+    """
     if den == 0:
         return 100.0
     return round(num / den * 100, 1)
@@ -66,6 +72,7 @@ def compute_coverage(
             "coverage": _pct(converted, len(items)),
         }
 
+    # Coverage の分母は「チェック対象の規範レベル」に限る。参考記述まで含めると率が薄まる
     target = [r for r in rules if r.rule_type in tx.TARGET_RULE_TYPES]
     res.target_rules = len(target)
     res.converted_rules = sum(1 for r in target if not r.unconverted_reason)
@@ -106,6 +113,7 @@ def compute_coverage(
         res.findings.append(
             f"類似チェック項目の候補が{res.duplicate_candidates}件あります。統合可否を確認してください。"
         )
+    # 指摘が1つも無いときも、確認済みであることが分かるよう1行残す
     if not res.findings:
         res.findings.append("必須・禁止規定のCoverageは100%です。未変換・曖昧・出典欠落もありません。")
     return res

@@ -26,15 +26,22 @@ logger = logging.getLogger(__name__)
 #: 提案数の上限。多すぎると標準由来の項目が埋もれる。
 MAX_RECOMMENDATIONS = 20
 
+#: 既定のモデル。ANTHROPIC_API_KEY が設定されている場合にのみ使う。
 CLAUDE_MODEL = "claude-opus-5"
 
 
 class RecommendationError(RuntimeError):
+    """推奨事項を生成できなかった。利用者に見せる文言をそのまま持つ。"""
     pass
 
 
 @dataclass
 class Recommendation:
+    """生成された推奨事項1件。
+
+    出典 (章・節・ページ) の項目を持たないのは意図的。標準書に無い提案に
+    出典を書けば、それは出典の捏造になる。
+    """
     category: str
     sub_category: str
     check_point: str
@@ -46,6 +53,11 @@ class Recommendation:
 
 
 def _covered(viewpoint: Viewpoint, haystack: str) -> bool:
+    """標準書がその観点に触れているかを見る。語が1つでも当たれば「規定あり」とみなす。
+
+    緩めの判定にしているのは、既に規定がある観点を重ねて提案する方が、
+    提案が1件少ないことより邪魔になるため。
+    """
     return any(keyword in haystack for keyword in viewpoint.keywords)
 
 
@@ -114,6 +126,10 @@ severity は Critical / High / Medium / Low のいずれか、category は次か
 
 
 def _build_schema() -> dict:
+    """Claude に返させる JSON の形。
+
+    severity は enum で縛る。自由記述を許すと画面の色分けに載らない値が返る。
+    """
     return {
         "type": "object",
         "properties": {
@@ -216,6 +232,11 @@ def claude_recommendations(
 
 
 def _parse_payload(response: object) -> dict:
+    """Claude の応答から JSON を取り出す。
+
+    解釈できなければ握りつぶさず例外にする。黙って0件を返すと、提案が無いのか
+    失敗したのかを利用者が区別できない。
+    """
     import json
 
     text = "".join(
@@ -232,12 +253,18 @@ def _parse_payload(response: object) -> dict:
 
 
 def _to_recommendations(payload: dict, rule_texts: list[str]) -> list[Recommendation]:
+    """Claude の応答を Recommendation に整える。
+
+    ここで3つの後始末をする。件数の上限、疑問文への統一、そして標準書に
+    既にある内容の言い換えを落とすこと。モデルの出力をそのまま信用しない。
+    """
     haystack = " ".join(rule_texts)
     out: list[Recommendation] = []
     for raw in payload.get("recommendations", [])[:MAX_RECOMMENDATIONS]:
         check_point = str(raw.get("check_point", "")).strip()
         if not check_point:
             continue
+        # 全項目を Yes/No/N/A で判定できる疑問文に揃える (必須原則)
         if not check_point.endswith(("か？", "か?")):
             check_point = check_point.rstrip("。？?") + "か？"
         severity = str(raw.get("severity", "Medium"))
@@ -245,6 +272,7 @@ def _to_recommendations(payload: dict, rule_texts: list[str]) -> list[Recommenda
             severity = "Medium"
         # 標準書に既にある内容の言い換えは落とす
         core = check_point.rstrip("か？?")
+        # 短すぎる語は偶然一致しやすいので、8文字以上のときだけ重複と見なす
         if len(core) >= 8 and core in haystack:
             continue
         out.append(
@@ -271,6 +299,7 @@ def generate(
     rule_texts: list[str],
     check_points: list[str],
 ) -> list[Recommendation]:
+    """生成方式を選んで実行する。未知の方式は例外にする。"""
     if generator == "claude":
         return claude_recommendations(
             document_name=document_name,

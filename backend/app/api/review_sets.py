@@ -39,6 +39,7 @@ router = APIRouter(prefix="/api/review-sets", tags=["review-sets"], dependencies
 
 
 def get_review_set(review_set_id: int, db: Session = Depends(get_db)) -> ReviewSet:
+    """パス中の id から統合レビュー表を引く依存関数。無ければ 404。"""
     review_set = db.get(ReviewSet, review_set_id)
     if review_set is None:
         raise HTTPException(status_code=404, detail="統合レビュー表が見つかりません")
@@ -46,12 +47,19 @@ def get_review_set(review_set_id: int, db: Session = Depends(get_db)) -> ReviewS
 
 
 def _documents(db: Session, review_set: ReviewSet) -> list[StandardDocument]:
+    """この統合レビュー表に含まれる標準書を、登録した順で返す。"""
     return [member.document for member in review_set.members]
 
 
 def _set_documents(db: Session, review_set: ReviewSet, document_ids: list[int]) -> None:
+    """対象の標準書を入れ替える。
+
+    重複した指定は先勝ちで畳む。並び順は指定された順のまま保つ (position)。
+    既存の割り当てを消してから入れ直すため、呼び出し後は再統合が必要になる。
+    """
     seen: list[int] = []
     for document_id in document_ids:
+        # 同じ標準書を二重に指定されても1件として扱う
         if document_id in seen:
             continue
         if db.get(StandardDocument, document_id) is None:
@@ -80,6 +88,7 @@ def _build(db: Session, review_set: ReviewSet) -> list[ConsolidatedRow]:
 
     rows = consolidate(per_document)
 
+    # 統合結果は毎回作り直す。差分更新にすると、統合の組み替えを追いきれない
     for old in db.scalars(
         select(ConsolidatedCheck).where(ConsolidatedCheck.review_set_pk == review_set.id)
     ).all():
@@ -103,6 +112,7 @@ def _build(db: Session, review_set: ReviewSet) -> list[ConsolidatedRow]:
 
 
 def _stored_rows(db: Session, review_set: ReviewSet) -> list[ConsolidatedCheck]:
+    """保存済みの統合行を採番順で返す。"""
     return list(
         db.scalars(
             select(ConsolidatedCheck)
@@ -113,6 +123,11 @@ def _stored_rows(db: Session, review_set: ReviewSet) -> list[ConsolidatedCheck]:
 
 
 def _to_out(db: Session, review_set: ReviewSet) -> ReviewSetOut:
+    """統合レビュー表を応答へ変換する。
+
+    含まれる標準書ごとの Coverage はここで都度算出する。標準書側を再解析
+    すると値が変わるため、統合時点の値を保存して見せると古くなる。
+    """
     members: list[ReviewSetMember] = []
     for document in _documents(db, review_set):
         result, _ = _coverage_result(db, document)
@@ -145,12 +160,14 @@ def _to_out(db: Session, review_set: ReviewSet) -> ReviewSetOut:
 
 @router.get("", response_model=list[ReviewSetOut])
 def list_review_sets(db: Session = Depends(get_db)) -> list[ReviewSetOut]:
+    """統合レビュー表の一覧。新しいものを先頭に出す。"""
     sets = db.scalars(select(ReviewSet).order_by(ReviewSet.id.desc())).all()
     return [_to_out(db, s) for s in sets]
 
 
 @router.post("", response_model=ReviewSetOut, status_code=201)
 def create_review_set(payload: ReviewSetCreate, db: Session = Depends(get_db)) -> ReviewSetOut:
+    """作成して、そのまま統合まで実行する。"""
     review_set = ReviewSet(name=payload.name.strip(), notes=payload.notes.strip())
     db.add(review_set)
     db.flush()
@@ -166,6 +183,7 @@ def create_review_set(payload: ReviewSetCreate, db: Session = Depends(get_db)) -
 def read_review_set(
     review_set: ReviewSet = Depends(get_review_set), db: Session = Depends(get_db)
 ) -> ReviewSetOut:
+    """統合レビュー表1件。"""
     return _to_out(db, review_set)
 
 
@@ -175,6 +193,10 @@ def update_review_set(
     review_set: ReviewSet = Depends(get_review_set),
     db: Session = Depends(get_db),
 ) -> ReviewSetOut:
+    """名前・備考・対象標準書を更新する。
+
+    対象標準書を入れ替えた場合は統合結果が食い違うので、続けて統合し直す。
+    """
     data = payload.model_dump(exclude_none=True)
     if "name" in data:
         review_set.name = data["name"].strip()
@@ -203,18 +225,31 @@ def rebuild(
 def delete_review_set(
     review_set: ReviewSet = Depends(get_review_set), db: Session = Depends(get_db)
 ) -> Response:
+    """統合レビュー表を削除する。
+
+    消えるのは統合表と統合行だけで、元の標準書と個別のチェックリストは残る。
+    """
     db.delete(review_set)
     db.commit()
     return Response(status_code=204)
 
 
 def _name_map(db: Session, review_set: ReviewSet) -> dict[int, str]:
+    """標準書 id → 文書名。出典の表示に使う。"""
     return {d.id: d.document_name for d in _documents(db, review_set)}
 
 
 def _row_out(
     db: Session, stored: ConsolidatedCheck, names: dict[int, str]
 ) -> ConsolidatedCheckOut:
+    """保存済みの統合行を応答へ組み立てる。
+
+    表示内容は代表のチェック項目 (primary) から取る。レビュー結果も代表の値を
+    返すが、更新時は統合元すべてへ書き戻すので、どれを見ても同じ値になる。
+
+    代表が見つからない場合は 409。標準書を再解析して Check ID が変わると、
+    統合表が古い項目を指したままになるため、再統合を促す。
+    """
     primary = db.get(ChecklistItem, stored.primary_item_pk)
     if primary is None:
         raise HTTPException(
@@ -251,6 +286,7 @@ def _row_out(
 def consolidated_checklist(
     review_set: ReviewSet = Depends(get_review_set), db: Session = Depends(get_db)
 ) -> list[ConsolidatedCheckOut]:
+    """統合チェックリスト。1行が複数の標準書を出典に持ちうる。"""
     names = _name_map(db, review_set)
     return [_row_out(db, stored, names) for stored in _stored_rows(db, review_set)]
 
@@ -366,6 +402,10 @@ REVIEW_SET_ARTIFACTS = (
 
 
 def _artifact(db: Session, review_set: ReviewSet, artifact: str) -> tuple[str, str, str]:
+    """成果物を1つ組み立てて (filename, media_type, body) を返す。
+
+    exporter を関数内で import しているのは、循環 import を避けるため。
+    """
     from app.core import exporter
 
     if artifact in ("consolidated-checklist", "consolidated-checklist-markdown", "cross-traceability-matrix"):
@@ -398,6 +438,7 @@ def _artifact(db: Session, review_set: ReviewSet, artifact: str) -> tuple[str, s
 
 
 def _disposition(filename: str) -> str:
+    """ダウンロード時のファイル名ヘッダ。日本語を含むので RFC 5987 形式で送る。"""
     from urllib.parse import quote
 
     return f"attachment; filename*=UTF-8''{quote(filename)}"
@@ -409,6 +450,7 @@ def download_review_set_artifact(
     review_set: ReviewSet = Depends(get_review_set),
     db: Session = Depends(get_db),
 ) -> Response:
+    """統合レビュー表の成果物を1つダウンロードする。"""
     filename, media_type, body = _artifact(db, review_set, artifact)
     return Response(
         content=body.encode("utf-8"),
@@ -421,6 +463,10 @@ def download_review_set_artifact(
 def download_review_set_bundle(
     review_set: ReviewSet = Depends(get_review_set), db: Session = Depends(get_db)
 ) -> Response:
+    """統合レビュー表の成果物をまとめて ZIP で返す。
+
+    標準書ごとの成果物は含まない。個別のものは各標準書の画面から取得する。
+    """
     import io
     import zipfile
 

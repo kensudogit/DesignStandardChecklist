@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * 標準書のアップロードフォーム。
+ *
+ * 入力欄の `name` はバックエンド (`backend/app/api/documents.py`) が受け取る
+ * フォーム項目名とそのまま対応している。`FormData` を加工せず送っているので、
+ * `name` を変えるとサーバ側も直す必要がある。
+ */
+
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -13,6 +21,7 @@ export function UploadForm({ onUploaded }: { onUploaded?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 文書種別などの選択肢はサーバ側の定義が正。ハードコードせず取得する
   useEffect(() => {
     api
       .meta()
@@ -22,11 +31,19 @@ export function UploadForm({ onUploaded }: { onUploaded?: () => void }) {
       );
   }, []);
 
+  /**
+   * 登録して解析まで走らせる。
+   *
+   * 解析はサーバ側で同期実行されるため、大きな標準書ではこの await が長くなる。
+   * その間はボタンを `busy` で止めて二重送信を防ぐ。
+   */
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    // await より前に読む。React はイベント処理後に currentTarget を null にするため
     const form = new FormData(event.currentTarget);
     const file = form.get("file");
+    // input は required だが、空ファイルは通ってしまうので大きさも見る
     if (!(file instanceof File) || file.size === 0) {
       setError("標準書ファイルを選択してください。");
       return;
@@ -34,6 +51,7 @@ export function UploadForm({ onUploaded }: { onUploaded?: () => void }) {
     setBusy(true);
     try {
       const doc = await api.uploadDocument(form);
+      // currentTarget はもう使えないので、ref 経由でフォームを初期化する
       formRef.current?.reset();
       onUploaded?.();
       router.push(`/documents/${doc.id}`);
@@ -44,6 +62,7 @@ export function UploadForm({ onUploaded }: { onUploaded?: () => void }) {
     }
   }
 
+  // meta 取得前でも選択できるよう、既定の拡張子を並べておく
   const accept = meta?.supported_extensions.join(",") ?? ".pdf,.docx,.xlsx,.md,.txt";
 
   return (

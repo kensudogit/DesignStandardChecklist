@@ -21,15 +21,19 @@ from app.models import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+#: auto_error=False にして、ヘッダが無い場合の扱いを各所で決められるようにする。
+#: 認証が無効なときは未提示でも通す必要があるため、ここで自動的に 401 にはしない。
 bearer = HTTPBearer(auto_error=False)
 
 
 class LoginRequest(BaseModel):
+    """ログイン要求。"""
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1)
 
 
 class UserOut(BaseModel):
+    """利用者の応答。パスワードハッシュは決して含めない。"""
     id: int
     username: str
     display_name: str
@@ -37,12 +41,17 @@ class UserOut(BaseModel):
 
 
 class LoginResponse(BaseModel):
+    """ログイン成功時の応答。expires_in は秒数。"""
     token: str
     expires_in: int
     user: UserOut
 
 
 class AuthStatus(BaseModel):
+    """認証の状態。ログイン前でも取得できる。
+
+    auth_enabled が False なら認証機能そのものが無効で、誰でも利用できる。
+    """
     auth_enabled: bool
     #: 有効なのに利用者が1人もいない状態 (初期セットアップが必要)
     needs_bootstrap: bool
@@ -50,6 +59,10 @@ class AuthStatus(BaseModel):
 
 
 class UserCreate(BaseModel):
+    """利用者の作成要求。
+
+    パスワードの下限は 8 文字。ここを緩めると総当たりが現実的になる。
+    """
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8)
     display_name: str = ""
@@ -57,6 +70,10 @@ class UserCreate(BaseModel):
 
 
 def _to_out(user: User) -> UserOut:
+    """モデルを応答へ変換する。
+
+    表示名が空ならユーザー名で代替する。Reviewer 欄が空欄になるのを防ぐため。
+    """
     return UserOut(
         id=user.id,
         username=user.username,
@@ -66,6 +83,10 @@ def _to_out(user: User) -> UserOut:
 
 
 def _secret() -> str:
+    """トークンの署名鍵を取り出す。未設定なら 500 で落とす。
+
+    鍵が無いまま署名すると誰でもトークンを偽造できるので、既定値では代用しない。
+    """
     settings = get_settings()
     if not settings.secret_key:
         raise HTTPException(
@@ -106,12 +127,17 @@ def current_user(
 
 
 def require_admin(user: User | None = Depends(current_user)) -> User | None:
+    """管理者だけを通す依存関数。
+
+    認証が無効なときは current_user が None を返すため、この関数も素通しになる。
+    """
     if user is not None and not user.is_admin:
         raise HTTPException(status_code=403, detail="管理者権限が必要です")
     return user
 
 
 def _user_count(db: Session) -> int:
+    """登録済みの利用者数。初期セットアップが必要かの判定に使う。"""
     return db.scalar(select(func.count()).select_from(User)) or 0
 
 
@@ -144,6 +170,10 @@ def status(
 
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
+    """ログインしてトークンを発行する。
+
+    認証が無効なときは 400。無効なのにトークンを配ると、状態が食い違う。
+    """
     settings = get_settings()
     if not settings.auth_enabled:
         raise HTTPException(status_code=400, detail="認証は無効です")
@@ -168,6 +198,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
 
 @router.get("/me", response_model=UserOut)
 def me(user: User | None = Depends(current_user)) -> UserOut:
+    """ログイン中の利用者。"""
     if user is None:
         raise HTTPException(status_code=400, detail="認証は無効です")
     return _to_out(user)
@@ -177,6 +208,7 @@ def me(user: User | None = Depends(current_user)) -> UserOut:
 def list_users(
     _: User | None = Depends(require_admin), db: Session = Depends(get_db)
 ) -> list[UserOut]:
+    """利用者一覧。管理者のみ。"""
     return [_to_out(u) for u in db.scalars(select(User).order_by(User.id)).all()]
 
 
@@ -206,6 +238,7 @@ def create_user(
         if actor is None or not actor.is_active or not actor.is_admin:
             raise HTTPException(status_code=403, detail="管理者権限が必要です")
 
+    # 一意制約に任せず先に確認する。DB エラーではなく意味のある文言を返すため
     if db.scalars(select(User).where(User.username == payload.username)).first():
         raise HTTPException(status_code=409, detail="そのユーザー名は既に使われています")
 
