@@ -306,3 +306,15 @@ def test_upload_recovers_when_the_document_id_was_taken(
     assert calls[0] == first["document_id"]  # 衝突させた
     assert len(calls) >= 2  # 採り直した
     assert second["document_id"] != first["document_id"]
+
+
+def test_root_points_to_the_api_docs(client: TestClient) -> None:
+    """バックエンドのポートをブラウザで開いたとき、行き先が分かること。
+
+    ルートを定義しないと素の {"detail":"Not Found"} が返るだけになる。
+    """
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert response.headers["location"] == "/docs"
+
+    assert client.get("/docs").status_code == 200

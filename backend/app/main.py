@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.api import analysis, auth, documents, exports, recommendations, review_sets
 from app.config import get_settings
@@ -66,6 +67,20 @@ app.include_router(analysis.router)
 app.include_router(exports.router)
 app.include_router(recommendations.router)
 app.include_router(review_sets.router)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    """ルートは API ドキュメントへ送る。
+
+    ここはブラウザで直接開かれることがある (バックエンドのポートを開くと最初に
+    来る)。ルートを定義しないと素の {"detail":"Not Found"} が出るだけで、
+    どこへ行けばよいか分からない。
+
+    なお、利用者向けの画面はフロントエンド側 (既定で :3000) にある。
+    こちらは API のみで、画面は配信していない。
+    """
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/api/health")
