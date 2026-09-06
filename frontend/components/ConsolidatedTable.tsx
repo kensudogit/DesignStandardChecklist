@@ -227,8 +227,10 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
                   <SeverityBadge severity={row.severity} />
                 </td>
                 <td className="small source-cell">
-                  {row.sources.map((source) => (
-                    <div key={source.check_id} style={{ marginBottom: 3 }}>
+                  {row.sources.map((source, index) => (
+                    // check_id は出典間で一意にならない。標準書ごとに同じ採番
+                    // (CHK-UI-001 等) を持つため、位置を含めて識別する
+                    <div key={`${source.check_id}-${index}`} style={{ marginBottom: 3 }}>
                       <span className="mono">{source.standard_id}</span>{" "}
                       <span className="muted">
                         {source.source_document} 章 {source.chapter} ／ 節 {source.section} ／

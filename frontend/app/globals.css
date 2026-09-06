@@ -874,3 +874,53 @@ details summary {
     display: none;
   }
 }
+
+/* 統合レビュー表の構成標準書。件数が増えても読めるよう、1件1枠で折り返す。 */
+.member-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  margin-top: 8px;
+}
+
+.member-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  transition: border-color 0.12s;
+}
+
+.member-card:hover {
+  border-color: var(--accent);
+}
+
+.member-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 3px;
+  /* 長い文書名で枠が崩れないようにする */
+  overflow-wrap: anywhere;
+}
+
+.member-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.member-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.member-details > summary > .muted {
+  margin-left: 6px;
+}

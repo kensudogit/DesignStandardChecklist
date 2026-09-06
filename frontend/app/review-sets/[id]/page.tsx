@@ -136,18 +136,39 @@ export default function ReviewSetPage({ params }: { params: Promise<{ id: string
 
       <section className="card" style={{ marginTop: 10 }}>
         <div className="row">
-          <div>
+          {/* flex の中で幅を取らせる。取らないと構成標準書のグリッドが1列に潰れる */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ marginBottom: 2 }}>{reviewSet.name}</h2>
-            <div className="small muted">
-              {reviewSet.documents.map((d) => (
-                <span key={d.document_id} style={{ marginRight: 14 }}>
-                  <span className="mono">{d.document_code}</span> {d.document_name}（
-                  {d.document_type_label} / {d.id_prefix} / チェック {d.check_count} 件 / Coverage{" "}
-                  {d.coverage ?? "—"}%）
-                </span>
-              ))}
-            </div>
-            <div className="small muted" style={{ marginTop: 4 }}>
+            {/* 構成標準書。1行に流すと文書数が増えたときに読めなくなるので、
+                1件1枠のカードにして折り返す。件数が多いとヘッダを占有するため
+                既定は畳んでおき、内訳を見たいときだけ開く */}
+            <details className="member-details">
+              <summary>
+                構成標準書 {reviewSet.documents.length} 件
+                <span className="muted">（クリックで内訳）</span>
+              </summary>
+              <div className="member-grid">
+                {reviewSet.documents.map((d) => (
+                  <Link
+                    key={d.document_id}
+                    href={`/documents/${d.document_id}`}
+                    className="member-card"
+                  >
+                    <div className="member-name">{d.document_name}</div>
+                    <div className="member-meta">
+                      <span className="mono">{d.document_code}</span>
+                      <span>{d.document_type_label}</span>
+                      <span className="mono">{d.id_prefix}</span>
+                  </div>
+                    <div className="member-meta">
+                      <span>チェック {d.check_count} 件</span>
+                      <span>Coverage {d.coverage ?? "—"}%</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </details>
+            <div className="small muted" style={{ marginTop: 6 }}>
               統合後 {reviewSet.check_count} 件（うち標準書をまたいで統合した重複{" "}
               {reviewSet.merged_count} 件）
             </div>
