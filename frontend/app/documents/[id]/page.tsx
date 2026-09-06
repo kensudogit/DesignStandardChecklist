@@ -40,7 +40,7 @@ type TabKey =
   | "unconverted"
   | "recommendations";
 
-/** ZIP 一括ダウンロードを表す擬似 artifact 名 (個別の成果物名と衝突しない)。 */
+/** 一式ダウンロードを表す擬似 artifact 名 (個別の成果物名と衝突しない)。 */
 const BUNDLE = "__bundle__";
 
 /**
@@ -74,7 +74,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  // ダウンロード中の成果物。ZIP 一括は BUNDLE で表す。
+  // ダウンロード中の成果物。一式ダウンロード中は BUNDLE で表す。
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,7 +149,16 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     setDownloading(artifact ?? BUNDLE);
     setError(null);
     try {
-      await api.downloadExport(documentId, artifact);
+      if (artifact) {
+        await api.downloadExport(documentId, artifact);
+      } else {
+        // 一式は ZIP にまとめず、1つずつ落とす。解凍の手間を省くため。
+        // 直列に await するのは、同時に走らせるとブラウザが後続の保存を
+        // 取りこぼすことがあるため。
+        for (const a of ARTIFACTS) {
+          await api.downloadExport(documentId, a.artifact);
+        }
+      }
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : "ダウンロードに失敗しました");
     } finally {
@@ -235,7 +244,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             onClick={() => void handleDownload()}
             disabled={downloading !== null}
           >
-            {downloading === BUNDLE ? "取得中…" : "⬇ 成果物一式 (ZIP)"}
+            {downloading === BUNDLE ? "取得中…" : "⬇ 成果物一式"}
           </button>
           {ARTIFACTS.map((a) => (
             <button
