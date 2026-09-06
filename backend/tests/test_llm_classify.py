@@ -220,3 +220,87 @@ def test_the_default_is_used_when_the_assist_gives_nothing() -> None:
     )
     assert _category_for("握りつぶさない", item, _FakeCategorizer(None)) == tx.DEFAULT_CATEGORY
     assert _category_for("握りつぶさない", item, None) == tx.DEFAULT_CATEGORY
+
+
+# --- 列の役割判定 -------------------------------------------------------------
+
+
+#: 語彙表に無い見出しだけで作った表。組織ごとの言い回しを想定する。
+UNKNOWN_HEADER = ["通し", "大分類", "記載事項", "強制度", "レベル区分", "良い例", "悪い例"]
+UNKNOWN_ROWS = [
+    ["1", "セキュリティ", "パスワードは平文で保存してはならない", "必須", "重大", "ハッシュ化", "平文DB保存"],
+]
+
+
+class _FakeColumns:
+    """Claude を呼ばずに列の役割だけ返す補助。"""
+
+    def __init__(self, roles):
+        self.roles = roles
+        self.asked: list[list[str]] = []
+
+    def column_roles(self, header):
+        self.asked.append(list(header))
+        return self.roles
+
+
+def _unknown_workbook() -> bytes:
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "コーディング標準"
+    ws.append(UNKNOWN_HEADER)
+    for row in UNKNOWN_ROWS:
+        ws.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_an_unknown_header_falls_back_to_joining_the_row() -> None:
+    """補助が無ければ従来どおり。行全体が1ブロックになる。"""
+    blocks = parse_document("標準.xlsx", _unknown_workbook()).blocks
+    assert any(" / " in b.text for b in blocks)
+
+
+def test_the_assist_makes_an_unknown_header_usable() -> None:
+    """語彙表に無い見出しでも、列の役割が分かれば規定本文だけを取り出せる。"""
+    roles = {0: "no", 1: "category", 2: "rule", 3: "rule_type", 4: "severity"}
+    assist = _FakeColumns(roles)
+
+    blocks = parse_document("標準.xlsx", _unknown_workbook(), assist).blocks
+    body = [b for b in blocks if b.is_table]
+    assert len(body) == 1
+    assert body[0].text == "パスワードは平文で保存してはならない"  # 行の連結ではない
+    assert body[0].category_hint == "セキュリティ"
+    assert body[0].severity_hint == "Critical"  # レベル区分「重大」
+    assert body[0].rule_type_hint == "Mandatory"  # 強制度「必須」
+    # 「良い例」「悪い例」は取り込まれない
+    assert "ハッシュ化" not in body[0].text
+
+
+def test_a_known_header_does_not_reach_the_assist() -> None:
+    """語彙一致で読める表は Claude に尋ねない。"""
+    assist = _FakeColumns({0: "rule"})
+    parse_document("標準.xlsx", _two_table_bytes(), assist)
+    assert assist.asked == []
+
+
+def _two_table_bytes() -> bytes:
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "標準"
+    ws.append(["No", "章", "節", "分類", "規定内容", "区分", "重要度", "備考"])
+    ws.append([1, 2, "2.1", "認証", "認証方式を定義すること", "必須", "高", ""])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_a_result_without_a_rule_column_is_dropped() -> None:
+    """規定本文の列が定まらない答えは使わない。表の意味を読み違えるため。"""
+    assist = _FakeColumns({0: "no", 1: "category"})  # rule が無い
+    blocks = parse_document("標準.xlsx", _unknown_workbook(), assist).blocks
+    # 従来どおり行を連結した扱いに戻る
+    assert any(" / " in b.text for b in blocks)

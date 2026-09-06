@@ -147,6 +147,55 @@ CATEGORY_TEMPLATE = """規定: {sentence}
 標準書が書いている分類: {hint}"""
 
 
+#: 列の役割の選択肢。table_schema の HEADER_KEYWORDS と同じ語彙。
+COLUMN_ROLES = ("rule", "chapter", "section", "category", "rule_type", "severity", "no", "note")
+
+COLUMNS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "columns": {
+            "type": "array",
+            "description": "役割が分かった列だけを挙げる。分からない列は挙げない。",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer", "description": "0 から数えた列番号"},
+                    "role": {"type": "string", "enum": list(COLUMN_ROLES)},
+                },
+                "required": ["index", "role"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["columns"],
+    "additionalProperties": False,
+}
+
+COLUMNS_SYSTEM = """あなたは設計標準書のレビュー支援を行う。
+
+与えられるのは、設計標準書の表のヘッダ行である。各列がどの役割かを判定する。
+
+役割:
+  rule       設計者が守るべき規定の本文が入る列 (「規定内容」「ルール」「確認内容」等)
+  chapter    章番号
+  section    節番号 / 項番
+  category   分類 / 観点
+  rule_type  必須・禁止・推奨などの区分
+  severity   重要度 / 重大度 / 優先度
+  no         連番
+  note       備考
+
+判断の指針:
+- 役割が分からない列は挙げない。無理に割り当てない。
+- rule は必ず1つに絞る。規定の本文が入る列が特定できなければ、columns を空にする。
+- 「良い例」「悪い例」「OK例」「NG例」「サンプル」は規定の本文ではない。挙げない。
+"""
+
+COLUMNS_TEMPLATE = """次のヘッダ行の各列の役割を判定してください。
+
+{header}"""
+
+
 def claude_available() -> bool:
     """SDK と資格情報が揃っているか。"""
     try:
@@ -298,6 +347,49 @@ class ClassifyAssist:
             return None
         self.stats["accepted"] += 1
         return category
+
+    def column_roles(self, header: list[str]) -> dict[int, str] | None:
+        """ヘッダ行から 列番号 -> 役割 を得る。使えなければ None。
+
+        語彙一致でヘッダを判定できなかった表だけが対象。「強制度」「レベル区分」の
+        ように、語彙表に無い見出しを使う標準書を拾うため。
+
+        検証する点は3つ。
+          - 役割が選択肢に入っていること
+          - 列番号がヘッダの範囲内であること
+          - 規定本文の列 (rule) がちょうど1つあること
+            (無ければ表の意味を読み違える。複数なら選べない)
+        """
+        rendered = " | ".join(f"[{i}] {c}" for i, c in enumerate(header))
+        payload = self.cache.get("columns", rendered)
+        if payload is not None:
+            self.stats["cached"] += 1
+        else:
+            payload = self._ask(
+                COLUMNS_TEMPLATE.format(header=rendered),
+                system=COLUMNS_SYSTEM,
+                schema=COLUMNS_SCHEMA,
+            )
+            if payload is None:
+                return None
+            self.cache.put("columns", rendered, payload)
+
+        roles: dict[int, str] = {}
+        for entry in payload.get("columns", []):
+            index, role = entry.get("index"), entry.get("role")
+            if role not in COLUMN_ROLES or not isinstance(index, int):
+                continue
+            if not 0 <= index < len(header):
+                continue
+            roles.setdefault(index, role)
+
+        if list(roles.values()).count("rule") != 1:
+            self.stats["rejected"] += 1
+            logger.info("列の役割判定を破棄しました (規定本文の列が定まらない): %s", rendered)
+            return None
+
+        self.stats["accepted"] += 1
+        return roles
 
     def _ask(self, sentence: str, system: str = "", schema: dict | None = None) -> dict | None:
         """Claude へ1回問い合わせる。system / schema を差し替えて別の問いにも使う。"""

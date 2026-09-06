@@ -12,7 +12,7 @@ from app.core.parsers.base import Block, ParsedDocument, ParseError
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xlsm", ".md", ".markdown", ".txt", ".csv"}
 
 
-def parse_document(filename: str, data: bytes) -> ParsedDocument:
+def parse_document(filename: str, data: bytes, assist=None) -> ParsedDocument:
     """拡張子を見てパーサを選ぶ。
 
     旧形式 (.doc / .xls) は「未対応」で終わらせず、変換を促す文言を返す。
@@ -24,7 +24,7 @@ def parse_document(filename: str, data: bytes) -> ParsedDocument:
     if ext == ".docx":
         return docx_parser.parse(data)
     if ext in (".xlsx", ".xlsm"):
-        return xlsx_parser.parse(data)
+        return xlsx_parser.parse(data, assist)
     if ext in (".md", ".markdown", ".txt", ".csv"):
         return text_parser.parse(data)
     if ext == ".doc":

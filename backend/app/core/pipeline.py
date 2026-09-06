@@ -135,7 +135,11 @@ def _preserved_review_state(db: Session, document_pk: int) -> dict[str, dict[str
 def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
     """STEP 2-14 を実行し、結果を DB に書き込む。"""
     data = Path(document.stored_path).read_bytes()
-    parsed = parse_document(document.original_filename, data)
+    settings = get_settings()
+    classify = llm_classify.build_assist(
+        settings.llm_classify_enabled, settings.llm_classify_cache_path
+    )
+    parsed = parse_document(document.original_filename, data, classify)
 
     # --- STEP 2: 文書構造解析 ---
     located = assign_structure(parsed.blocks)
@@ -143,10 +147,6 @@ def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
     document.has_page_numbers = any(item.page is not None for item in located)
 
     # --- STEP 3-6: 規定候補抽出 / 分類 / 要求事項化 ---
-    settings = get_settings()
-    classify = llm_classify.build_assist(
-        settings.llm_classify_enabled, settings.llm_classify_cache_path
-    )
     extracted = extract_rules(located, classify)
 
     preserved = _preserved_review_state(db, document.id)

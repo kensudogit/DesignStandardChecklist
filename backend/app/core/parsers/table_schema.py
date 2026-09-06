@@ -109,6 +109,37 @@ def _detect_header(rows: list[list[str]], start: int) -> tuple[int, TableSchema]
     return None
 
 
+def detect_tables_with_assist(rows: list[list[str]], assist) -> list[TableRegion]:
+    """語彙一致で1つも表を見つけられなかったときだけ、Claude に列の役割を尋ねる。
+
+    「強制度」「レベル区分」のように語彙表に無い見出しを使う標準書を拾うため。
+    ヘッダらしい行 (短いセルが3つ以上並ぶ行) を上から順に試し、規定本文の列を
+    特定できたところで採用する。特定できなければ従来どおり行全体を連結する。
+    """
+    found = detect_tables(rows)
+    if found or assist is None or not hasattr(assist, "column_roles"):
+        return found
+
+    for row_index, row in enumerate(rows):
+        cells = [c for c in row if c.strip()]
+        # 本文の行を投げないための足切り。ヘッダは短い語が並ぶ
+        if len(cells) < MIN_HEADER_MATCHES or any(len(c) > 12 for c in cells):
+            continue
+        roles = assist.column_roles(row)
+        # 規定本文の列が定まらない答えは使わない。表の意味を読み違えるうえ、
+        # 後段が rule_column を前提にしている。補助側でも検証しているが、
+        # 差し替え可能な相手を信用せず、使う側でも確かめる
+        if roles and list(roles.values()).count("rule") == 1:
+            return [
+                TableRegion(
+                    header_index=row_index,
+                    schema=TableSchema(roles=roles),
+                    end_index=len(rows) - 1,
+                )
+            ]
+    return found
+
+
 def detect_tables(rows: list[list[str]]) -> list[TableRegion]:
     """シート内の表をすべて拾う。
 

@@ -13,7 +13,7 @@ import io
 
 from app.core.parsers.base import Block, ParsedDocument, ParseError
 from app.core.parsers.table_schema import (
-    detect_tables,
+    detect_tables_with_assist,
     map_chapter,
     map_rule_type,
     map_section,
@@ -24,7 +24,7 @@ from app.core.parsers.table_schema import (
 MAX_ROWS_PER_SHEET = 20000
 
 
-def parse(data: bytes) -> ParsedDocument:
+def parse(data: bytes, assist=None) -> ParsedDocument:
     """Excel を Block にする。
 
     ヘッダを判定できた表は列ごとに意味を持たせて取り出し、判定できなければ
@@ -51,7 +51,7 @@ def parse(data: bytes) -> ParsedDocument:
 
         blocks.append(Block(text=str(ws.title), heading_level=1, locator=str(ws.title)))
 
-        tables = detect_tables(rows)
+        tables = detect_tables_with_assist(rows, assist)
         if tables:
             structured_sheets += 1
             # 表ごとに、その表のヘッダで読む。1枚に複数の表が並ぶことがある
