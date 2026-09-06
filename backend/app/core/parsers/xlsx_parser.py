@@ -13,7 +13,7 @@ import io
 
 from app.core.parsers.base import Block, ParsedDocument, ParseError
 from app.core.parsers.table_schema import (
-    detect_schema,
+    detect_tables,
     map_chapter,
     map_rule_type,
     map_section,
@@ -51,10 +51,12 @@ def parse(data: bytes) -> ParsedDocument:
 
         blocks.append(Block(text=str(ws.title), heading_level=1, locator=str(ws.title)))
 
-        detected = detect_schema(rows)
-        if detected is not None:
+        tables = detect_tables(rows)
+        if tables:
             structured_sheets += 1
-            blocks.extend(_structured_blocks(ws.title, rows, detected))
+            # 表ごとに、その表のヘッダで読む。1枚に複数の表が並ぶことがある
+            for table in tables:
+                blocks.extend(_structured_blocks(ws.title, rows, table))
         else:
             blocks.extend(_flat_blocks(ws.title, rows))
 
@@ -67,15 +69,18 @@ def parse(data: bytes) -> ParsedDocument:
     )
 
 
-def _structured_blocks(sheet: str, rows: list[list[str]], detected) -> list[Block]:
-    """ヘッダを判定できた表から、規定内容の列だけを本文として取り出す。
+def _structured_blocks(sheet: str, rows: list[list[str]], table) -> list[Block]:
+    """1つの表から、規定内容の列だけを本文として取り出す。
 
     章・節・区分・重要度は標準書がその列に書いている値なので、推測ではなく
     記載そのものとして hint に載せて後段へ渡す。
+
+    読むのは table が示す行範囲だけ。シート全体に当てると、次の表の行を
+    この表の列対応で読んでしまう。
     """
-    header_index, schema = detected
+    header_index, schema = table.header_index, table.schema
     rule_column = schema.rule_column
-    assert rule_column is not None  # detect_schema が保証する
+    assert rule_column is not None  # detect_tables が保証する
 
     def cell(row: list[str], role: str) -> str:
         index = schema.column_of(role)
@@ -84,7 +89,8 @@ def _structured_blocks(sheet: str, rows: list[list[str]], detected) -> list[Bloc
         return row[index]
 
     out: list[Block] = []
-    for offset, row in enumerate(rows[header_index + 1 :], start=header_index + 2):
+    body = rows[header_index + 1 : table.end_index + 1]
+    for offset, row in enumerate(body, start=header_index + 2):
         if rule_column >= len(row):
             continue
         text = row[rule_column].strip()

@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.core import taxonomy as tx
 from app.core.extractor import ExtractedRule, extract_condition, normalize_requirement
 
 #: 「Aし、Bすること」のような並列動作の区切り
@@ -64,6 +65,12 @@ def to_question(requirement: str) -> str:
     s = requirement.strip().rstrip("。？?")
     if s.endswith("か"):
         return s + "？"
+
+    # 否定で終わる規定はそのまま疑問にできる。
+    # 「欠落していない」→「欠落していないか？」(「〜ないになっているか？」を避ける)
+    if s.endswith("ない"):
+        return s + "か？"
+
     for old, new in (
         ("なっている", "なっているか"),
         ("されている", "されているか"),
@@ -74,6 +81,13 @@ def to_question(requirement: str) -> str:
     ):
         if s.endswith(old):
             return s[: -len(old)] + new + "？"
+
+    # 体言止めのうち、サ変名詞で終わるものは「〜しているか？」が自然。
+    # 「型が一致」→「型が一致しているか？」
+    for noun in tx.SAHEN_NOUNS:
+        if s.endswith(noun):
+            return s + "しているか？"
+
     return s + "になっているか？"
 
 

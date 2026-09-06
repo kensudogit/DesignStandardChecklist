@@ -20,7 +20,7 @@ HEADER_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("section", ("節番号", "節", "条項", "項番")),
     ("category", ("分類", "カテゴリ", "カテゴリー", "観点", "対象")),
     ("rule_type", ("必須区分", "強制力", "区分", "種別")),
-    ("severity", ("重要度", "優先度", "レベル", "ランク")),
+    ("severity", ("重要度", "重大度", "優先度", "レベル", "ランク")),
     ("no", ("no", "№", "番号", "通番")),
     ("note", ("備考", "補足", "メモ", "注記")),
 ]
@@ -42,12 +42,9 @@ SEVERITY_VALUES: list[tuple[str, tuple[str, ...]]] = [
     ("Low", ("低", "軽微", "Low", "low", "D")),
 ]
 
-#: ヘッダ行と判定するのに必要な、役割を特定できた列の数
+#: ヘッダ行と判定するのに必要な、役割を特定できた列の数。
 #: 少なすぎると本文の行を誤ってヘッダと判定する。
 MIN_HEADER_MATCHES = 3
-
-#: ヘッダを探す範囲 (先頭の改訂履歴などを読み飛ばすため)
-HEADER_SEARCH_ROWS = 10
 
 CHAPTER_VALUE = re.compile(r"^第?\s*(\d+)\s*章?$")
 SECTION_VALUE = re.compile(r"^(\d+(?:[.\-]\d+)*)$")
@@ -78,12 +75,23 @@ class TableSchema:
         return None
 
 
-def detect_schema(rows: list[list[str]]) -> tuple[int, TableSchema] | None:
-    """(ヘッダ行のindex, スキーマ) を返す。ヘッダを見つけられなければ None。"""
-    for row_index, row in enumerate(rows[:HEADER_SEARCH_ROWS]):
+@dataclass(frozen=True)
+class TableRegion:
+    """1つの表。ヘッダ行と、その列対応が通用する行の範囲。"""
+
+    #: ヘッダ行の index
+    header_index: int
+    schema: TableSchema
+    #: この表に属する最後の行の index (含む)。次の表のヘッダの手前まで。
+    end_index: int
+
+
+def _detect_header(rows: list[list[str]], start: int) -> tuple[int, TableSchema] | None:
+    """start 以降で最初に見つかるヘッダ行を返す。"""
+    for row_index in range(start, len(rows)):
         roles: dict[int, str] = {}
         used: set[str] = set()
-        for column_index, cell in enumerate(row):
+        for column_index, cell in enumerate(rows[row_index]):
             value = _normalize(cell)
             # 長いセルは見出しではなく本文。ヘッダ行の判定から外す
             if not value or len(value) > 12:
@@ -99,6 +107,47 @@ def detect_schema(rows: list[list[str]]) -> tuple[int, TableSchema] | None:
         if len(roles) >= MIN_HEADER_MATCHES and "rule" in used:
             return row_index, TableSchema(roles=roles)
     return None
+
+
+def detect_tables(rows: list[list[str]]) -> list[TableRegion]:
+    """シート内の表をすべて拾う。
+
+    1枚のシートに表が複数並ぶ標準書がある (記載例の表と、レビュー観点の表など)。
+    最初の表のヘッダを全行へ当てると、別の表の列を取り違える。実際、確認内容の
+    列を持つ表に記載例の表の列対応を当てて「NG例」を規定内容として読む、という
+    取り違えが起きていた。表ごとに自分のヘッダを使う。
+
+    行が上から下へ並ぶ前提で、次のヘッダが現れた行の手前までを1つの表とみなす。
+    表と表の間にある見出し行や空行は、その表の規定内容の列が空になるため
+    後段で落ちる。
+    """
+    headers: list[tuple[int, TableSchema]] = []
+    index = 0
+    while index < len(rows):
+        found = _detect_header(rows, index)
+        if found is None:
+            break
+        headers.append(found)
+        index = found[0] + 1
+
+    return [
+        TableRegion(
+            header_index=header_index,
+            schema=schema,
+            end_index=(headers[position + 1][0] - 1)
+            if position + 1 < len(headers)
+            else len(rows) - 1,
+        )
+        for position, (header_index, schema) in enumerate(headers)
+    ]
+
+
+def detect_schema(rows: list[list[str]]) -> tuple[int, TableSchema] | None:
+    """先頭の表だけを返す。表が1つしか無い前提の呼び出し向け。"""
+    tables = detect_tables(rows)
+    if not tables:
+        return None
+    return tables[0].header_index, tables[0].schema
 
 
 def map_rule_type(value: str) -> str | None:

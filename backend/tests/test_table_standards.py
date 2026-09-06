@@ -269,3 +269,126 @@ def test_table_metadata_survives_the_full_pipeline(tmp_path) -> None:
     assert auth_check.severity == "Critical"
     assert "標準書" in auth_check.severity_reason
     db.close()
+
+
+# --- 1シートに複数の表がある標準書 -------------------------------------------
+
+#: 記載例の表。レビューに使う規定ではなく、書き方の見本。
+EXAMPLE_HEADER = ["No.", "設計対象", "必須記載事項", "記述ルール", "サンプル", "備考"]
+EXAMPLE_ROWS = [
+    [1, "機能概要", "目的、利用者、前提", "要件IDを必ず紐付けること", "受注登録", ""],
+]
+
+#: レビュー観点の表。区分列を持たず、重大度だけが付く。
+VIEWPOINT_HEADER = ["観点", "確認内容", "OK例", "NG例", "重大度", "備考"]
+VIEWPOINT_ROWS = [
+    ["完全性", "必須項目が欠落していない", "標準項目を全て記載", "空欄のままレビュー", "高", ""],
+    ["整合性", "関連設計とのID・名称・型が一致", "名称統一", "同一項目で名称不一致", "高", ""],
+]
+
+
+def _two_table_workbook() -> bytes:
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "基本設計標準"
+    ws.append(["基本設計標準（サンプル）"])
+    ws.append([])
+    ws.append(EXAMPLE_HEADER)
+    for row in EXAMPLE_ROWS:
+        ws.append(row)
+    ws.append([])
+    ws.append(["設計ルール／レビュー観点"])
+    ws.append(VIEWPOINT_HEADER)
+    for row in VIEWPOINT_ROWS:
+        ws.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_each_table_is_read_with_its_own_header() -> None:
+    """1枚のシートに表が複数あるとき、表ごとに自分のヘッダで読む。
+
+    先頭の表のヘッダを全行へ当てると、2つ目の表の列を取り違える。実際に
+    「NG例」の列を規定内容として読み、標準と正反対のチェック項目を作りかねない
+    状態だった。
+    """
+    from app.core.parsers.table_schema import detect_tables
+
+    parsed, rules = _rules(_two_table_workbook())
+    texts = [b.text for b in parsed.blocks]
+
+    # 2つ目の表からは「確認内容」を採る。「NG例」は採らない
+    assert "必須項目が欠落していない" in texts
+    assert "関連設計とのID・名称・型が一致" in texts
+    assert "空欄のままレビュー" not in texts
+    assert "同一項目で名称不一致" not in texts
+
+    # 1つ目の表からは「記述ルール」を採る
+    assert "要件IDを必ず紐付けること" in texts
+
+    rows = [
+        ["基本設計標準（サンプル）"],
+        [],
+        EXAMPLE_HEADER,
+        [str(c) for c in EXAMPLE_ROWS[0]],
+        [],
+        ["設計ルール／レビュー観点"],
+        VIEWPOINT_HEADER,
+    ]
+    assert len(detect_tables(rows)) == 2
+
+
+def test_a_severity_column_alone_makes_the_row_a_rule() -> None:
+    """区分列が無くても、標準書が重要度を与えている行は規定として扱う。
+
+    「観点 / 確認内容 / 重大度」形式のレビュー観点表には区分列が無い。本文にも
+    「〜すること」のような規範表現が無いため、重要度を根拠にしないと1件も
+    拾えない。標準書自身がレビュー対象として挙げている以上、取りこぼさない。
+    """
+    _, rules = _rules(_two_table_workbook())
+    by_text = {r.original_rule: r for r in rules}
+
+    completeness = by_text["必須項目が欠落していない"]
+    assert completeness.explicit_severity == "High"  # 重大度「高」を読んでいる
+    # 根拠が重要度列であることを追えるようにする
+    assert any("重要度列" in m for m in completeness.matched_markers)
+
+
+def test_a_category_column_naming_a_known_category_is_used_as_is() -> None:
+    """分類列が分類名そのものを書いているなら、それをそのまま使う。
+
+    語彙一致だけに任せると、分類名が語彙に無いために標準書の分類が捨てられ、
+    本文から別の分類が付いてしまう (「完全性」が「入力」になっていた)。
+    """
+    from app.core.extractor import infer_category
+
+    assert infer_category("必須項目が欠落していない", "", "完全性") == "完全性"
+    assert infer_category("なんらかの規定", "", "セキュリティ") == "セキュリティ"
+    # 分類名に無い語は従来どおり語彙で寄せる
+    assert infer_category("なんらかの規定", "", "整合性") == "正確性"
+
+
+def test_a_normative_expression_wins_over_the_severity_column() -> None:
+    """本文に規範表現があれば、そちらを規範レベルの根拠にする。
+
+    重要度列は「区分が書かれていない」ときの代替でしかない。
+    """
+    from app.core.extractor import classify_rule_type
+
+    rule_type, markers = classify_rule_type(
+        "パスワードを平文で保存してはならない", severity_hint="High"
+    )
+    assert rule_type == "Prohibited"
+    assert not any("重要度列" in m for m in markers)
+
+
+def test_a_severity_header_written_as_juudaido_is_recognized() -> None:
+    """重要度の列見出しは「重大度」と書かれることもある。"""
+    from app.core.parsers.table_schema import detect_schema
+
+    rows = [VIEWPOINT_HEADER, [str(c) for c in VIEWPOINT_ROWS[0]]]
+    detected = detect_schema(rows)
+    assert detected is not None
+    assert detected[1].column_of("severity") == 4

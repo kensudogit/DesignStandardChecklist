@@ -56,12 +56,19 @@ def _strip_tail(text: str) -> str:
 
 
 def classify_rule_type(
-    text: str, rule_type_hint: str | None = None
+    text: str, rule_type_hint: str | None = None, severity_hint: str | None = None
 ) -> tuple[str | None, list[str]]:
     """規範レベルを判定する。どのマーカーにも当たらなければ None (規定候補ではない)。
 
     rule_type_hint は表形式の標準書の「区分」列。標準書自身の分類なので原則それに従うが、
     本文に明示的な禁止表現がある場合だけは本文を優先する (必須原則 7: 禁止を取りこぼさない)。
+
+    severity_hint は「重要度 / 重大度」列。区分列を持たない標準書でも、
+    「観点 / 確認内容 / 重大度」形式のレビュー観点表には重要度だけが付く。
+    標準書がその行に重要度を与えているのは、レビューで確認する対象として
+    挙げているということなので、本文に規範表現が無くても規定として扱う。
+    区分が書かれていない以上どの強さかは不明なため、レビューで確認すべき項目
+    という意味で Mandatory とし、根拠は「重要度列:高」の形で残す。
     """
     body = _strip_tail(text)
 
@@ -100,6 +107,10 @@ def classify_rule_type(
     if recommended:
         return "Recommended", recommended
 
+    # 本文の規範表現が優先。それが無いときだけ重要度列を根拠にする
+    if severity_hint:
+        return "Mandatory", [f"重要度列:{severity_hint}"]
+
     return None, []
 
 
@@ -116,6 +127,14 @@ def infer_category(text: str, heading_path: str, category_hint: str | None = Non
     表形式の標準書が「分類」列を持っているならそれが標準書自身の分類なので最優先。
     次に規定文そのもの。見出しは最後 (文書名が全行に効いて細かい分類を潰すため)。
     """
+    # 分類列が分類名そのものを書いている場合 (「完全性」「セキュリティ」等) は
+    # そのまま使う。語彙一致に任せると、分類名が語彙に無いために標準書の分類が
+    # 捨てられ、本文から別の分類が付いてしまう。
+    if category_hint:
+        stripped = category_hint.strip()
+        if stripped in {name for name, _ in tx.CATEGORY_KEYWORDS}:
+            return stripped
+
     for candidate in (category_hint, text, heading_path):
         if not candidate:
             continue
@@ -272,7 +291,9 @@ def extract_rules(located: list[Located]) -> list[ExtractedRule]:
                 continue
             if len(sentence) < 6:
                 continue
-            rule_type, markers = classify_rule_type(sentence, item.rule_type_hint)
+            rule_type, markers = classify_rule_type(
+                sentence, item.rule_type_hint, item.severity_hint
+            )
             if rule_type is None:
                 continue
             body = _strip_tail(sentence)
