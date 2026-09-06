@@ -152,3 +152,71 @@ def test_an_example_row_stays_out() -> None:
     assist = _FakeAssist({})
     rules = extract_rules(_located(), assist)
     assert [r.original_rule for r in rules] == ["1機能1責務を原則"]
+
+
+# --- 分類の割り当て -----------------------------------------------------------
+
+
+def test_a_category_outside_the_list_is_dropped() -> None:
+    """選択肢に無い分類が返ってきたら使わない。"""
+    from app.core.llm_classify import CATEGORY_NAMES
+
+    assert "例外処理" in CATEGORY_NAMES
+    assert "構造" not in CATEGORY_NAMES  # 標準書が書いていても選択肢にはならない
+
+
+class _FakeCategorizer:
+    """Claude を呼ばずに分類だけ返す補助。"""
+
+    def __init__(self, answer: str | None):
+        self.answer = answer
+        self.asked: list[tuple[str, str | None]] = []
+
+    def classify(self, sentence: str):
+        return None
+
+    def categorize(self, sentence: str, hint: str | None):
+        self.asked.append((sentence, hint))
+        return self.answer
+
+
+def test_the_assist_is_asked_only_when_the_vocabulary_misses() -> None:
+    """語彙一致で決まる分類は Claude に尋ねない。"""
+    from app.core.extractor import _category_for
+    from app.core.structure import Located
+
+    item = Located(
+        text="", page=None, chapter=None, section=None, heading_path="",
+        is_table=True, locator=None, order=0, category_hint="セキュリティ",
+    )
+    assist = _FakeCategorizer("ログ")
+    assert _category_for("認証方式を定義すること", item, assist) == "セキュリティ"
+    assert assist.asked == []
+
+
+def test_the_assist_fills_in_a_category_the_vocabulary_lacks() -> None:
+    """語彙表に無い分類名 (「例外」) を橋渡しする。"""
+    from app.core.extractor import _category_for
+    from app.core.structure import Located
+
+    item = Located(
+        text="", page=None, chapter=None, section=None, heading_path="",
+        is_table=True, locator=None, order=0, category_hint="例外",
+    )
+    assist = _FakeCategorizer("例外処理")
+    assert _category_for("握りつぶさない", item, assist) == "例外処理"
+    assert assist.asked == [("握りつぶさない", "例外")]
+
+
+def test_the_default_is_used_when_the_assist_gives_nothing() -> None:
+    """補助が答えなければ既定値。従来の動作に戻る。"""
+    from app.core import taxonomy as tx
+    from app.core.extractor import _category_for
+    from app.core.structure import Located
+
+    item = Located(
+        text="", page=None, chapter=None, section=None, heading_path="",
+        is_table=True, locator=None, order=0, category_hint="構造",
+    )
+    assert _category_for("握りつぶさない", item, _FakeCategorizer(None)) == tx.DEFAULT_CATEGORY
+    assert _category_for("握りつぶさない", item, None) == tx.DEFAULT_CATEGORY

@@ -115,6 +115,38 @@ USER_TEMPLATE = """次の1行を判定してください。
 {sentence}"""
 
 
+#: 分類の選択肢。taxonomy の分類名をそのまま使う。
+CATEGORY_NAMES = tuple(name for name, _ in tx.CATEGORY_KEYWORDS)
+
+CATEGORY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "category": {
+            "type": "string",
+            "enum": list(CATEGORY_NAMES),
+            "description": "最も近い分類。一覧に無い分類は選べない。",
+        },
+    },
+    "required": ["category"],
+    "additionalProperties": False,
+}
+
+CATEGORY_SYSTEM = """あなたは設計標準書のレビュー支援を行う。
+
+与えられた規定を、次の分類のいずれかに割り当てる。
+
+{names}
+
+判断の指針:
+- 標準書自身が書いている分類名 (「観点」「分類」列の値) があれば、それに最も近いものを選ぶ。
+- 無ければ規定の内容から判断する。
+- どれにも当てはまらないと感じたら「完全性」を選ぶ。
+""".format(names=chr(10).join("  - " + n for n in CATEGORY_NAMES))
+
+CATEGORY_TEMPLATE = """規定: {sentence}
+標準書が書いている分類: {hint}"""
+
+
 def claude_available() -> bool:
     """SDK と資格情報が揃っているか。"""
     try:
@@ -176,17 +208,18 @@ class ClassifyCache:
                 self._data = {}
 
     @staticmethod
-    def key(sentence: str) -> str:
-        raw = f"{PROMPT_VERSION}\n{CLAUDE_MODEL}\n{sentence}"
+    def key(kind: str, sentence: str) -> str:
+        """種別を含める。同じ文に別の問い (規定判定 / 分類) を投げるため。"""
+        raw = f"{PROMPT_VERSION}\n{CLAUDE_MODEL}\n{kind}\n{sentence}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def get(self, sentence: str) -> dict | None:
+    def get(self, kind: str, sentence: str) -> dict | None:
         self._load()
-        return self._data.get(self.key(sentence))
+        return self._data.get(self.key(kind, sentence))
 
-    def put(self, sentence: str, payload: dict) -> None:
+    def put(self, kind: str, sentence: str, payload: dict) -> None:
         self._load()
-        self._data[self.key(sentence)] = payload
+        self._data[self.key(kind, sentence)] = payload
         if not self.path:
             return
         try:
@@ -213,14 +246,14 @@ class ClassifyAssist:
         if not is_candidate(sentence):
             return None
 
-        payload = self.cache.get(sentence)
+        payload = self.cache.get("rule", sentence)
         if payload is not None:
             self.stats["cached"] += 1
         else:
             payload = self._ask(sentence)
             if payload is None:
                 return None
-            self.cache.put(sentence, payload)
+            self.cache.put("rule", sentence, payload)
 
         result = validate(sentence, payload)
         if result is None:
@@ -233,7 +266,43 @@ class ClassifyAssist:
         self.stats["accepted"] += 1
         return result
 
-    def _ask(self, sentence: str) -> dict | None:
+    def categorize(self, sentence: str, hint: str | None) -> str | None:
+        """分類を1つ選ばせる。選択肢に無い値が返ったら None。
+
+        ルールベースの語彙一致が何にも当たらなかったときだけ呼ぶ。標準書が分類列を
+        持っていれば、その値も判断材料として渡す (標準書自身の分類が最優先という
+        方針は変えず、語彙表に無い書き方を橋渡しするだけ)。
+        """
+        if not is_candidate(sentence):
+            return None
+
+        # 規定文と分類列の組で覚える。同じ文でも分類列が違えば別の問い
+        key_text = sentence + " <<hint>> " + (hint or "")
+        payload = self.cache.get("category", key_text)
+        if payload is not None:
+            self.stats["cached"] += 1
+        else:
+            payload = self._ask(
+                CATEGORY_TEMPLATE.format(sentence=sentence, hint=hint or "(なし)"),
+                system=CATEGORY_SYSTEM,
+                schema=CATEGORY_SCHEMA,
+            )
+            if payload is None:
+                return None
+            self.cache.put("category", key_text, payload)
+
+        category = payload.get("category")
+        if category not in CATEGORY_NAMES:
+            self.stats["rejected"] += 1
+            logger.info("分類の判定を破棄しました (選択肢に無い): %s", category)
+            return None
+        self.stats["accepted"] += 1
+        return category
+
+    def _ask(self, sentence: str, system: str = "", schema: dict | None = None) -> dict | None:
+        """Claude へ1回問い合わせる。system / schema を差し替えて別の問いにも使う。"""
+        system = system or SYSTEM_PROMPT
+        schema = schema or RESPONSE_SCHEMA
         import anthropic
 
         self.stats["asked"] += 1
@@ -246,12 +315,12 @@ class ClassifyAssist:
                 thinking={"type": "adaptive"},
                 output_config={
                     "effort": "low",
-                    "format": {"type": "json_schema", "schema": RESPONSE_SCHEMA},
+                    "format": {"type": "json_schema", "schema": schema},
                 },
                 system=[
                     {
                         "type": "text",
-                        "text": SYSTEM_PROMPT,
+                        "text": system,
                         "cache_control": {"type": "ephemeral"},
                     }
                 ],

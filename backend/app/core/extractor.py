@@ -122,8 +122,8 @@ def _match_category(haystack: str) -> str | None:
     return None
 
 
-def infer_category(text: str, heading_path: str, category_hint: str | None = None) -> str:
-    """分類を決める。
+def match_category(text: str, heading_path: str, category_hint: str | None = None) -> str | None:
+    """分類を決める。決められなければ None。
 
     表形式の標準書が「分類」列を持っているならそれが標準書自身の分類なので最優先。
     次に規定文そのもの。見出しは最後 (文書名が全行に効いて細かい分類を潰すため)。
@@ -142,7 +142,12 @@ def infer_category(text: str, heading_path: str, category_hint: str | None = Non
         matched = _match_category(candidate)
         if matched:
             return matched
-    return tx.DEFAULT_CATEGORY
+    return None
+
+
+def infer_category(text: str, heading_path: str, category_hint: str | None = None) -> str:
+    """分類を決める。決められなければ既定値。"""
+    return match_category(text, heading_path, category_hint) or tx.DEFAULT_CATEGORY
 
 
 def extract_condition(text: str) -> str | None:
@@ -276,6 +281,22 @@ def _starts_with_exception(sentence: str) -> bool:
     return sentence.lstrip().startswith(tx.EXCEPTION_CONNECTIVES)
 
 
+def _category_for(sentence: str, item: Located, assist) -> str:
+    """分類を決める。語彙一致が外れたときだけ Claude に尋ねる。
+
+    語彙表は「例外」「構造」のような分類名を持たないため、標準書がそう書いていても
+    既定値へ落ちていた。ここだけを補う。選択肢は taxonomy の分類名に限る。
+    """
+    matched = match_category(sentence, item.heading_path, item.category_hint)
+    if matched is not None:
+        return matched
+    if assist is not None and hasattr(assist, "categorize"):
+        judged = assist.categorize(sentence, item.category_hint)
+        if judged is not None:
+            return judged
+    return tx.DEFAULT_CATEGORY
+
+
 def extract_rules(located: list[Located], assist=None) -> list[ExtractedRule]:
     """規定候補を抽出する。
 
@@ -313,7 +334,7 @@ def extract_rules(located: list[Located], assist=None) -> list[ExtractedRule]:
             body = _strip_tail(sentence)
             rule = ExtractedRule(
                 rule_type=rule_type,
-                category=infer_category(sentence, item.heading_path, item.category_hint),
+                category=_category_for(sentence, item, assist),
                 original_rule=body,
                 normalized_requirement=normalize_requirement(body, rule_type),
                 chapter=item.chapter,
