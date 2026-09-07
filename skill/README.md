@@ -67,8 +67,23 @@
 `examples/` の CSV はその実装で生成しているので、Skill の記述と実装の出力が
 一致していることを実際に確認できる。
 
-## フォルダ名
+## 他の環境へ配置する
 
-親フォルダ名と `SKILL.md` の `name` は一致させている。
+Skill はフォルダ名で識別されるため、**配置先のフォルダ名は `SKILL.md` の `name` と
+一致させる**必要がある。このリポジトリ内では実装との対応を示すために `skill/` という
+名前にしてあるので、配置するときに読み替える。
 
-`design-standard-checklist-generator`
+```bash
+cp -r skill ~/.claude/skills/design-standard-checklist-generator
+```
+
+Windows (PowerShell):
+
+```powershell
+Copy-Item -Recurse skill "$env:USERPROFILE\.claude\skills\design-standard-checklist-generator"
+```
+
+**フォルダごと配置する。** `SKILL.md` 単体では `references/` と `templates/` への
+参照が切れ、判定順序も語彙表も無い状態になる。
+
+スクリプトも外部依存も持たないので、これ以外の準備は要らない。
