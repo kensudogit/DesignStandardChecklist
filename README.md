@@ -24,7 +24,7 @@
 |---|---|---|
 | バックエンド | Python 3.12 / FastAPI / SQLAlchemy / SQLite | [`backend/`](backend) |
 | フロントエンド | Next.js (App Router) / React / TypeScript | [`frontend/`](frontend) |
-| 元Skill | SKILL.md・テンプレート・変換ルール | [`skill/`](skill) |
+| 元Skill | SKILL.md・語彙表・変換ルール・テンプレート・例示 | [`skill/`](skill) |
 | サンプル標準書 | 12の文書種別を一通り揃えた標準書サンプル（Markdown / Word / Excel） | [`samples/`](samples) |
 | 変換精度の評価 | 正解データ (gold) と評価スクリプト | [`backend/eval/`](backend/eval) |
 
