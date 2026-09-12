@@ -1,0 +1,184 @@
+# GitLab CI/CD
+#
+# .github/workflows/ci.yml と同じ検証を GitLab 上でも行う。
+# 段階は gitlab-flow-development Skill の 13章に合わせている。
+#   Compile → Unit Test → Lint / Static Analysis → Build
+# 4章の Security Check は secret_detection が担う。
+#
+# 二重管理になるため、GitHub Actions 側を変更したらこちらも合わせること。
+
+# Secret情報の混入検知。secret_detection ジョブが stage: test に追加される
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+stages:
+  - compile
+  - test
+  - analyze
+  - build
+
+variables:
+  # pip / npm のキャッシュをプロジェクト配下に置く。
+  # 既定の ~/.cache は GitLab Runner の cache 対象外で、毎回再ダウンロードになる
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Merge Request と main でのみ動かす。作業ブランチへの push ごとに全ジョブを
+# 回すと、レビュー待ちの Merge Request の CI が順番待ちになる
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# --- 共通定義 ---------------------------------------------------------------
+
+.python:
+  image: python:3.12
+  cache:
+    key:
+      files:
+        - backend/requirements.txt
+        - backend/requirements-optional.txt
+    paths:
+      - .cache/pip
+
+.node:
+  image: node:22
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/.npm
+
+# --- Compile ----------------------------------------------------------------
+
+backend-compile:
+  extends: .python
+  stage: compile
+  script:
+    # 依存を入れる前に構文エラーだけ先に落とす。pytest まで待つより早く分かる
+    - cd backend
+    - python -m compileall -q app eval
+
+frontend-typecheck:
+  extends: .node
+  stage: compile
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run typecheck
+  artifacts:
+    paths:
+      - frontend/node_modules
+    expire_in: 1 hour
+
+# --- Unit Test --------------------------------------------------------------
+
+backend-test:
+  extends: .python
+  stage: test
+  script:
+    - cd backend
+    - python -m pip install --upgrade pip
+    - pip install -r requirements.txt
+    # 任意の依存も入れて、Claude API 連携のテストまで実行する
+    - pip install -r requirements-optional.txt
+    - pytest -q --junitxml=report.xml
+  artifacts:
+    # 失敗したときこそレポートが要る
+    when: always
+    reports:
+      junit: backend/report.xml
+    paths:
+      - backend/report.xml
+    expire_in: 1 week
+
+# --- Lint / Static Analysis -------------------------------------------------
+
+scripts-syntax:
+  # GitHub Actions では windows-latest で実行しているが、GitLab.com の無料枠に
+  # Windows Runner は無い。PowerShell 7 の Linux イメージで同じ検査を行う
+  image: mcr.microsoft.com/powershell:latest
+  stage: analyze
+  script:
+    - bash -n start.sh && echo "start.sh : OK"
+    # .ps1 は実行せず構文解析だけ行う。-File で走らせるとサーバが起動してしまう
+    - >
+      pwsh -NoProfile -Command '
+      $ng = $false;
+      foreach ($f in @("start.ps1", "stop.ps1")) {
+      $err = $null;
+      [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$err) | Out-Null;
+      if ($err) { Write-Host "$f : 構文エラー"; $err | ForEach-Object { Write-Host "  $($_.Message)" }; $ng = $true }
+      else { Write-Host "$f : OK" }
+      };
+      if ($ng) { exit 1 }'
+    # Windows PowerShell 5.1 は BOM の無い UTF-8 を CP932 として読むため、
+    # 日本語を含む .ps1 には BOM が必要
+    - |
+      for f in start.ps1 stop.ps1; do
+        if [ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+          echo "$f : BOM OK"
+        else
+          echo "$f : UTF-8 BOM がありません"; exit 1
+        fi
+      done
+
+eval-report:
+  extends: .python
+  stage: analyze
+  script:
+    - cd backend
+    - python -m pip install --upgrade pip
+    - pip install -r requirements.txt -r requirements-optional.txt
+    - python -m eval.runner --details
+  # 合否は backend/tests/test_eval_baseline.py で判定済み。
+  # ここは変換精度の差分を人が読むための表示なので、パイプラインは止めない
+  allow_failure: true
+
+# --- Build ------------------------------------------------------------------
+
+frontend-build:
+  extends: .node
+  stage: build
+  needs:
+    - frontend-typecheck
+  script:
+    - cd frontend
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/.next
+    expire_in: 1 week
+
+# --- 未整備の検査 -----------------------------------------------------------
+#
+# Skill 13章は Lint と静的解析を求めているが、現状どちらも入っていない。
+# 無い検査を CI で動くように見せかけると、通っていることが保証の代わりに
+# なってしまうため、ジョブは置かずここに残す。
+#
+# フロントエンド:
+#   package.json の "lint": "next lint" は Next.js 16 で廃止済み。
+#   ESLint も依存に無い。導入するなら eslint と eslint-config-next を
+#   devDependencies へ追加し、スクリプトを "eslint ." に変えたうえで
+#   次のジョブを足す。
+#
+#     frontend-lint:
+#       extends: .node
+#       stage: analyze
+#       script:
+#         - cd frontend
+#         - npm run lint
+#
+# バックエンド:
+#   Python の Linter が未設定。ruff を入れる場合は requirements に追加し、
+#   backend/pyproject.toml に [tool.ruff] を書いたうえで次を足す。
+#
+#     backend-lint:
+#       extends: .python
+#       stage: analyze
+#       script:
+#         - cd backend
+#         - pip install ruff
+#         - ruff check .
