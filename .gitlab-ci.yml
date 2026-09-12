@@ -141,7 +141,7 @@ frontend-lint:
     - cd frontend
     - npm ci --cache .npm --prefer-offline
     # --max-warnings は package.json の lint スクリプトに入れてある。
-    # 既存の警告8件は許容し、9件目で落ちる
+    # 既存の警告6件は許容し、7件目で落ちる
     - npm run lint
 
 eval-report:

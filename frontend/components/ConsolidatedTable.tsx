@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ResultBadge, SeverityBadge } from "@/components/Badges";
 import { api, ApiError } from "@/lib/api";
@@ -43,10 +43,17 @@ export function ConsolidatedTable({ reviewSetId, rows, onChanged }: Props) {
   /** 未保存の入力内容。キーは統合チェック項目の id。 */
   const [drafts, setDrafts] = useState<Record<number, Partial<ConsolidatedCheck>>>({});
 
-  // 一覧が入れ替わったら未保存の入力は捨てる (古い draft の混入を防ぐ)
-  useEffect(() => {
+  /**
+   * 一覧が入れ替わったら未保存の入力は捨てる (古い draft の混入を防ぐ)。
+   *
+   * useEffect ではなく描画中に調整する。効果は描画の後に走るため、rows が
+   * 入れ替わった直後の1フレームだけ古い draft が新しい行に当たってしまう。
+   */
+  const [renderedRows, setRenderedRows] = useState(rows);
+  if (rows !== renderedRows) {
+    setRenderedRows(rows);
     setDrafts({});
-  }, [rows]);
+  }
 
   // 出典の標準書名を重複なく集める。1行が複数出典を持つため flatMap で潰す
   const documentNames = useMemo(

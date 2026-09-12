@@ -16,13 +16,17 @@ const config = [
       /**
        * useEffect の中から setState を同期的に呼ぶと再レンダリングが連鎖する、という指摘。
        *
-       * 現状8件該当し、いずれもマウント時のデータ取得
-       * (`useEffect(() => { void load() }, [load])`) である。動作しているコードを
-       * 8ファイル同時に書き換えるのはこの MR の範囲を超えるため、警告に留める。
+       * 残り6件はいずれもマウント時のデータ取得
+       * (`useEffect(() => { void load() }, [load])`) である。setState は await の
+       * 後に走るため同期的な再レンダリングの連鎖ではなく、規則が async を
+       * 追えていない面が強い。動作しているコードを書き換える利得が小さいので
+       * 警告に留める。
        *
-       * package.json の lint スクリプトで --max-warnings 8 を指定してあるので、
-       * 9件目が入ると CI が落ちる。今ある分は残るが、増えはしない。
-       * 解消は別 Issue で1ファイルずつ行う。
+       * 一方、props の変化で state をリセットしていた2件は実害があったため
+       * 描画中の調整へ直した (ChecklistTable / ConsolidatedTable)。
+       *
+       * package.json の lint スクリプトで --max-warnings 6 を指定してあるので、
+       * 7件目が入ると CI が落ちる。今ある分は残るが、増えはしない。
        */
       "react-hooks/set-state-in-effect": "warn",
     },
