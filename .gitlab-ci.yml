@@ -98,7 +98,9 @@ scripts-syntax:
   image: mcr.microsoft.com/powershell:latest
   stage: analyze
   script:
-    - bash -n start.sh && echo "start.sh : OK"
+    # クォートを外さないこと。`: ` を含む行は YAML が辞書として解釈し、
+    # 「script config should be a string」でパイプラインごと起動しなくなる
+    - 'bash -n start.sh && echo "start.sh : OK"'
     # .ps1 は実行せず構文解析だけ行う。-File で走らせるとサーバが起動してしまう
     - >
       pwsh -NoProfile -Command '
