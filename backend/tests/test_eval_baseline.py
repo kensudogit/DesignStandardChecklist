@@ -15,7 +15,13 @@ import json
 import pytest
 
 from eval.gold import load_gold_sets
-from eval.runner import BASELINE_PATH, GOLD_DIR, REPO_ROOT, build_report, compare_baseline
+from eval.runner import (
+    BASELINE_PATH,
+    GOLD_DIR,
+    REPO_ROOT,
+    build_report,
+    compare_baseline,
+)
 
 
 @pytest.fixture(scope="module")

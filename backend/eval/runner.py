@@ -35,7 +35,14 @@ from app.core.extractor import ExtractedRule, extract_rules  # noqa: E402
 from app.core.parsers import parse_document  # noqa: E402
 from app.core.pipeline import checks_for_rule  # noqa: E402
 from app.core.structure import assign_structure  # noqa: E402
-from eval.gold import GoldCheck, GoldRule, GoldSet, load_gold_sets, normalize, validate  # noqa: E402
+from eval.gold import (  # noqa: E402
+    GoldCheck,
+    GoldRule,
+    GoldSet,
+    load_gold_sets,
+    normalize,
+    validate,
+)
 
 GOLD_DIR = EVAL_DIR / "gold"
 BASELINE_PATH = EVAL_DIR / "baseline.json"

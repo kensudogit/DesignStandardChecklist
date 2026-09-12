@@ -7,16 +7,15 @@ Check ID をキーに引き継ぐ。
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core import llm_classify, llm_split
 from app.core import taxonomy as tx
-from app.core import llm_classify
-from app.core import llm_split
 from app.core.atomizer import AtomicCheck, atomize, base_sentence
 from app.core.coverage import CoverageResult, compute_coverage
 from app.core.dedupe import find_duplicates
@@ -303,7 +302,7 @@ def analyze_document(db: Session, document: StandardDocument) -> CoverageResult:
     )
     document.status = "analyzed"
     document.error_message = None
-    document.analyzed_at = datetime.now(timezone.utc)
+    document.analyzed_at = datetime.now(UTC)
     document.file_format = parsed.meta.get("format", document.file_format)
     db.commit()
     return result

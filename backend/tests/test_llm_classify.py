@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """STEP 5 補助（規定か記述例かの判定）の検証。
 
 Claude は呼ばない。応答を模した dict を validate に通して、受け入れる条件と
