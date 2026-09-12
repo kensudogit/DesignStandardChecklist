@@ -123,6 +123,27 @@ scripts-syntax:
         fi
       done
 
+backend-lint:
+  extends: .python
+  stage: analyze
+  script:
+    - cd backend
+    # ruff は実行時の依存ではないのでここで入れる。バージョンを固定するのは、
+    # 上がった拍子に新しい規則が増えて、無関係な MR が落ちるのを防ぐため
+    - pip install ruff==0.16.7
+    # 規則は backend/pyproject.toml の [tool.ruff] に書いてある
+    - ruff check app eval tests
+
+frontend-lint:
+  extends: .node
+  stage: analyze
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    # --max-warnings は package.json の lint スクリプトに入れてある。
+    # 既存の警告8件は許容し、9件目で落ちる
+    - npm run lint
+
 eval-report:
   extends: .python
   stage: analyze
@@ -152,33 +173,20 @@ frontend-build:
       - frontend/.next
     expire_in: 1 week
 
-# --- 未整備の検査 -----------------------------------------------------------
+# --- Lint / 静的解析について -------------------------------------------------
 #
-# Skill 13章は Lint と静的解析を求めているが、現状どちらも入っていない。
-# 無い検査を CI で動くように見せかけると、通っていることが保証の代わりに
-# なってしまうため、ジョブは置かずここに残す。
+# Skill 13章が求める Lint と静的解析は backend-lint / frontend-lint が担う。
+# どちらも「導入時点で緑に回る設定」から始めてある。既存コードに大量の指摘が
+# 出る状態で必須化すると、全員がその検査を無視するようになり、以後どんな指摘も
+# 届かなくなるため。
 #
-# フロントエンド:
-#   package.json の "lint": "next lint" は Next.js 16 で廃止済み。
-#   ESLint も依存に無い。導入するなら eslint と eslint-config-next を
-#   devDependencies へ追加し、スクリプトを "eslint ." に変えたうえで
-#   次のジョブを足す。
+# バックエンド (ruff):
+#   規則は backend/pyproject.toml の [tool.ruff]。E501 (行長) と B008 (FastAPI の
+#   Depends) を除外し、tests/* の F811 (pytest のフィクスチャ) も除外している。
+#   除外した理由は同ファイルのコメントに書いた。
 #
-#     frontend-lint:
-#       extends: .node
-#       stage: analyze
-#       script:
-#         - cd frontend
-#         - npm run lint
-#
-# バックエンド:
-#   Python の Linter が未設定。ruff を入れる場合は requirements に追加し、
-#   backend/pyproject.toml に [tool.ruff] を書いたうえで次を足す。
-#
-#     backend-lint:
-#       extends: .python
-#       stage: analyze
-#       script:
-#         - cd backend
-#         - pip install ruff
-#         - ruff check .
+# フロントエンド (ESLint):
+#   frontend/eslint.config.mjs。react-hooks/set-state-in-effect が8件該当するが、
+#   いずれもマウント時のデータ取得で、動くコードを8ファイル同時に直す話になる。
+#   警告に落としたうえで --max-warnings 8 で件数を固定してある。
+#   9件目が入れば落ちるので、debt は増えない。解消は別 Issue で行う。
