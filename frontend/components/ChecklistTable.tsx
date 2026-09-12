@@ -11,7 +11,7 @@
  * 自由入力を1文字ごとに保存しないのは、打鍵のたびに PATCH が飛ぶのを避けるため。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ResultBadge, SeverityBadge } from "@/components/Badges";
 import { api, ApiError } from "@/lib/api";
@@ -51,11 +51,19 @@ export function ChecklistTable({
    */
   const [drafts, setDrafts] = useState<Record<number, Partial<ChecklistItem>>>({});
 
-  // 一覧が入れ替わったら未保存の入力は捨てる。古い draft を残すと、
-      // 別の解析結果に対して前の入力値を表示してしまう
-  useEffect(() => {
+  /**
+   * 一覧が入れ替わったら未保存の入力は捨てる。古い draft を残すと、
+   * 別の解析結果に対して前の入力値を表示してしまう。
+   *
+   * useEffect ではなく描画中に調整する。効果は描画の後に走るため、
+   * items が入れ替わった直後の1フレームだけ「新しい items に古い draft を
+   * 当てた状態」が描画されてしまい、防ごうとしている取り違えがそこで起きる。
+   */
+  const [renderedItems, setRenderedItems] = useState(items);
+  if (items !== renderedItems) {
+    setRenderedItems(items);
     setDrafts({});
-  }, [items]);
+  }
 
   // 分類の選択肢は取得済みの項目から作る。文書ごとに出現する分類が違うため
   const categories = useMemo(
