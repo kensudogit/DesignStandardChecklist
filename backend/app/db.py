@@ -8,6 +8,7 @@ SQLite は書き込みが直列化されるため、同時記入では待ちや�
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
@@ -35,6 +36,12 @@ def build_engine(raw_url: str) -> Engine:
     url = make_url(_resolve_url(raw_url))
 
     if url.get_backend_name() == "sqlite":
+        # ファイルDBは親ディレクトリが無いと接続時に落ちる。既定の storage/ は
+        # .gitignore 対象なので、クローン直後には存在しない。アップロード先
+        # (config.storage_path) と同じく、必要になった時点で作る。
+        if url.database and url.database != ":memory:":
+            Path(url.database).parent.mkdir(parents=True, exist_ok=True)
+
         # SQLite の既定はスレッドをまたぐ接続を拒む。FastAPI は別スレッドで動くため外す
         kwargs: dict = {"connect_args": {"check_same_thread": False}}
         # インメモリDBは接続ごとに別物になる。テストで同じDBを見るため接続を1本に固定する
