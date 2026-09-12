@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.auth import current_user
 from app.api.analysis import _coverage_result, _items, apply_reviewer
+from app.api.auth import current_user
 from app.core import taxonomy as tx
 from app.core.consolidate import ConsolidatedRow, consolidate, sources_of
 from app.db import get_db
@@ -19,7 +19,6 @@ from app.models import (
     ConsolidatedCheck,
     ReviewSet,
     ReviewSetDocument,
-    Rule,
     StandardDocument,
     User,
 )
@@ -106,7 +105,7 @@ def _build(db: Session, review_set: ReviewSet) -> list[ConsolidatedRow]:
                 severity=row.severity,
             )
         )
-    review_set.consolidated_at = datetime.now(timezone.utc)
+    review_set.consolidated_at = datetime.now(UTC)
     db.commit()
     return rows
 

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,7 +15,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.security import TokenError, create_token, hash_password, read_token, verify_password
+from app.core.security import (
+    TokenError,
+    create_token,
+    hash_password,
+    read_token,
+    verify_password,
+)
 from app.db import get_db
 from app.models import User
 
@@ -183,7 +189,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="ユーザー名またはパスワードが違います")
 
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     db.commit()
 
     ttl = settings.session_ttl_seconds

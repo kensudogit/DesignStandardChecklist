@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core import taxonomy as tx
 from app.core.coverage import CoverageResult
@@ -313,7 +313,7 @@ def coverage_markdown(
         )
     assert result is not None
 
-    generated = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    generated = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
     lines = [
         "# Coverage Report",
         "",

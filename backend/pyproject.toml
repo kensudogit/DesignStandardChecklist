@@ -7,3 +7,27 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# 既定 (E4,E7,E9,F) に import 順・旧い書き方・バグを生みやすい書き方を足す。
+# 網羅性より「入れた瞬間から緑で回る」ことを優先している。緑でない検査は
+# 無視されるようになり、あってもレビューの役に立たない。
+select = ["E", "F", "I", "UP", "B"]
+
+ignore = [
+    # 行長。表示幅で数えると130行が該当する (日本語コメントは全角2カラム)。
+    # 動いているコードを130行書き換える理由が無いため外す。
+    # 揃えたくなったら ruff format の導入と合わせて検討する。
+    "E501",
+    # 引数の既定値での関数呼び出し。FastAPI の Depends() / File() が全て該当する。
+    # フレームワークが要求する書き方なので、指摘として成立しない。
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest のフィクスチャは import して引数名で受ける。ruff からは
+# 「import した名前を引数が再定義している」ように見えるが、これは pytest の仕様。
+"tests/*" = ["F811"]
