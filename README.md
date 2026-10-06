@@ -541,3 +541,35 @@ cd frontend && npm run typecheck
   機械的に除外していますが、提案の妥当性は人が判断してください。
 - **認証は最小限です。** パスワードログインとセッショントークンのみで、SSO・パスワードリセット・
   監査ログはありません。インターネットに公開する場合はリバースプロキシ側での保護も併用してください。
+
+---
+
+## Portfolio Evidence & Quality Gates
+
+This repository treats design-review automation as a **traceability and quality-control problem**, not merely document summarization.
+
+| Evidence area | Repository evidence |
+|---|---|
+| Extraction accuracy | Gold-data evaluation for rule extraction |
+| Atomic decomposition | Gold-data evaluation for review-item conversion |
+| Traceability | Every generated check retains its source relationship |
+| Coverage | Converted and unconverted requirements are measurable |
+| Regression control | Baseline comparison can fail CI when quality degrades |
+| Human governance | AI recommendations are separated from normative source-derived checks |
+
+### Current reference evaluation
+
+The checked-in evaluation workflow documents a reference set of **115 source rules / 160 review items** across five standards. The README reports 100.0% rule-extraction F1 and 98.7% review-item F1 for that reference set. These figures describe the repository's current curated evaluation dataset; they should not be generalized to arbitrary external standards without additional validation.
+
+### Reviewer demo path
+
+1. Upload one of the supplied sample standards.
+2. Inspect extracted rules and their source locations.
+3. Open the generated Atomic Checks and verify severity/category assignment.
+4. Inspect Coverage and the unconverted-rule view.
+5. Record OK / NG / N/A review results and export the artifacts.
+6. Run the evaluation baseline check to see how regression protection is enforced.
+
+### Maturity boundary
+
+The deterministic engine is intentionally conservative. Scanned-image PDFs require OCR, Word/Excel cannot provide true page numbers, and semantic duplicate consolidation is not automatic. Organization-specific terminology should be added to the taxonomy and validated against organization-specific gold data before production governance use.
