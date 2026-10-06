@@ -8,6 +8,17 @@
 >
 > **Stack:** Python 3.12 · FastAPI · Next.js · React · TypeScript · SQLAlchemy
 
+
+## Portfolio Overview
+
+| | |
+|---|---|
+| **Problem** | Large software design standards are difficult to convert into consistent, traceable review criteria. |
+| **Solution** | Deterministically extracts requirements and converts them into Atomic Checks with severity, source references and coverage. |
+| **Architecture** | Document ingestion → rule extraction → Atomic Check decomposition → traceability/coverage → review UI/export. |
+| **Differentiators** | Reproducible rule-based generation, source traceability, measurable coverage, optional AI recommendations kept separate from normative rules. |
+| **Stack** | Python 3.12 · FastAPI · Next.js · React · TypeScript · SQLAlchemy |
+
 `design-standard-checklist-generator` Skill を、実際に動作するアプリケーションとして実装したものです。
 
 設計標準書（画面設計標準・詳細設計標準・DB設計標準・API設計標準など）をアップロードすると、
