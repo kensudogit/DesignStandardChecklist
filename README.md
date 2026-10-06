@@ -1,5 +1,9 @@
 # 設計標準チェックリスト生成 (Design Standard Checklist Generator)
 
+> **Design Quality Automation** · Converts software design standards into traceable, review-ready checklists with Atomic Checks, severity, source references and coverage analysis.
+>
+> **Stack:** Python 3.12 · FastAPI · Next.js · React · TypeScript · SQLAlchemy
+
 `design-standard-checklist-generator` Skill を、実際に動作するアプリケーションとして実装したものです。
 
 設計標準書（画面設計標準・詳細設計標準・DB設計標準・API設計標準など）をアップロードすると、
